@@ -1,10 +1,13 @@
 package org.firstinspires.ftc.teamcode.subsystem;
 
 import com.acmerobotics.dashboard.config.Config;
+import com.pedropathing.ivy.CommandBuilder;
 import com.pedropathing.revhub.drivetrains.CachedMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.HardwareMap;
+
+import static com.pedropathing.ivy.commands.Commands.instant;
 
 @Config
 public class Shooter {
@@ -63,6 +66,8 @@ public class Shooter {
 
     public void disable() {
         activated = false;
-        power(0);
     }
+
+    public CommandBuilder enable = instant(this::enable);
+    public CommandBuilder disable = instant(this::disable);
 }

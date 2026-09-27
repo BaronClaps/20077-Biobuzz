@@ -60,16 +60,16 @@ public class Robot {
 
     public CommandBuilder shoot() {
         return sequential(
-                intake.openGate(),
-                intake.shoot(),
+                intake.open,
+                intake.transfer,
                 waitMs(750),
-                intake.intake(),
-                intake.closeGate()
+                intake.in,
+                intake.close
         );
     }
 
     public CommandBuilder intake() {
-        return intake.intake().with(intake.closeGate());
+        return intake.in.with(intake.close);
     }
 
     public Pose pose() {

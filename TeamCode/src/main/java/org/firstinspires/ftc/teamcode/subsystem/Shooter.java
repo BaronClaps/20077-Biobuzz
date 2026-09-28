@@ -19,11 +19,11 @@ public class Shooter {
     public Shooter(HardwareMap hardwareMap) {
         top = new CachedMotor(hardwareMap.get(DcMotorEx.class, "shooterTop"), 0.01);
         bottom = new CachedMotor(hardwareMap.get(DcMotorEx.class, "shooterBottom"), 0.01);
-        bottom.setDirection(DcMotorSimple.Direction.REVERSE);
+        top.setDirection(DcMotorSimple.Direction.REVERSE);
     }
 
     public void update() {
-        current = top.raw().getVelocity();
+        current = -top.raw().getVelocity();
 
         if (activated) {
             if (Math.abs(target - velocity()) > useRaw)

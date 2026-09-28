@@ -2,16 +2,20 @@ package org.firstinspires.ftc.teamcode.tests;
 
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
+
+import org.firstinspires.ftc.teamcode.subsystem.Intake;
 import org.firstinspires.ftc.teamcode.subsystem.Shooter;
 
 @TeleOp(name = "Shooter Test", group = "Tests")
 public class ShooterTest extends OpMode {
     Shooter shooter;
+    Intake intake;
     public static double velocity = 0, power = 0, mode = 0;
 
     @Override
     public void init() {
         shooter = new Shooter(hardwareMap);
+        intake = new Intake(hardwareMap);
 
         shooter.disable();
     }
@@ -48,6 +52,12 @@ public class ShooterTest extends OpMode {
 
         if (gamepad1.xWasPressed())
             mode = 2;
+
+        if (gamepad1.leftBumperWasPressed())
+            intake.stop();
+
+        if (gamepad1.rightBumperWasPressed())
+            intake.transfer();
 
         shooter.update();
 

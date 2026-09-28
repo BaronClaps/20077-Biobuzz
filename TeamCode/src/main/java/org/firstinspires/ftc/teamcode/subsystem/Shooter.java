@@ -27,7 +27,7 @@ public class Shooter {
 
         if (activated) {
             if (Math.abs(target - velocity()) > useRaw)
-                power(Math.signum(target() - velocity()));
+                power(Math.max(Math.signum(target() - velocity()), 0));
             else
                 power(Math.max(0, (kV * target()) + (kP * (target() - velocity())) + kS));
         } else {

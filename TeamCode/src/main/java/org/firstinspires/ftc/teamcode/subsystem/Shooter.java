@@ -13,7 +13,7 @@ import static com.pedropathing.ivy.commands.Commands.instant;
 public class Shooter {
     private final CachedMotor top, bottom;
     private double target = 0, current = 0;
-    public static double kS = 0.07, kV = 0.0003975, kP = 0.01, useRaw = 80, targetThreshold = 40;
+    public static double kS = 0.129403, kV = 0.00042071, kP = 0.00705, useRaw = 80, targetThreshold = 40;
     public boolean activated = false;
 
     public Shooter(HardwareMap hardwareMap) {

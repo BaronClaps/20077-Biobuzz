@@ -44,7 +44,7 @@ public class Turret {
     public void face(Pose targetPose, Pose robotPose) {
         double angleToTargetFromCenter = Math.atan2(targetPose.y() - robotPose.y(), targetPose.x() - robotPose.x());
         double robotAngleDiff = normalizeSigned(angleToTargetFromCenter - robotPose.heading());
-        robotAngleDiff = Utils.clamp(robotAngleDiff, -(Math.PI/2), Math.PI);
+        robotAngleDiff = Utils.clamp(robotAngleDiff, -Math.PI/2, Math.PI);
         angle(robotAngleDiff);
     }
 }

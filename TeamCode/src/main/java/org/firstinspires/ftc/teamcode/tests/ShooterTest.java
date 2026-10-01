@@ -1,6 +1,8 @@
 package org.firstinspires.ftc.teamcode.tests;
 
+import com.acmerobotics.dashboard.FtcDashboard;
 import com.acmerobotics.dashboard.config.Config;
+import com.acmerobotics.dashboard.telemetry.MultipleTelemetry;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 
@@ -12,6 +14,7 @@ import org.firstinspires.ftc.teamcode.subsystem.Shooter;
 public class ShooterTest extends OpMode {
     Shooter shooter;
     Intake intake;
+    MultipleTelemetry telemetryM;
     public static double velocity = 0, power = 0, mode = 0;
 
     @Override
@@ -20,6 +23,8 @@ public class ShooterTest extends OpMode {
         intake = new Intake(hardwareMap);
 
         shooter.disable();
+
+        telemetryM = new MultipleTelemetry(telemetry, FtcDashboard.getInstance().getTelemetry());
     }
 
     @Override
@@ -63,10 +68,10 @@ public class ShooterTest extends OpMode {
 
         shooter.update();
 
-        telemetry.addData("Mode", mode == 0 ? "Disabled" : mode == 1 ? "Velocity" : "Power");
-        telemetry.addData("Target Velocity", shooter.target());
-        telemetry.addData("Current Velocity", shooter.velocity());
-        telemetry.addData("Target Power", power);
-        telemetry.update();
+        telemetryM.addData("Mode", mode == 0 ? "Disabled" : mode == 1 ? "Velocity" : "Power");
+        telemetryM.addData("Target Velocity", shooter.target());
+        telemetryM.addData("Current Velocity", shooter.velocity());
+        telemetryM.addData("Target Power", power);
+        telemetryM.update();
     }
 }

@@ -37,5 +37,8 @@ public class PivotTest extends OpMode {
 
         intake.setFlower(flower);
         intake.setAdjustable(adjustable);
+
+        telemetry.addData("detected?", intake.detected());
+        telemetry.update();
     }
 }

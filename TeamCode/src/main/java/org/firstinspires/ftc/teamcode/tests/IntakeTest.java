@@ -30,5 +30,8 @@ public class IntakeTest extends OpMode {
             intake.open();
         else if (gamepad1.leftTriggerWasPressed())
             intake.close();
+
+        telemetry.addData("detected?", intake.detected());
+        telemetry.update();
     }
 }

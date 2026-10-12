@@ -17,11 +17,11 @@ import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
 public class Intake {
     public final CachedMotor i, t;
     public final Servo gate, adjustableLeft, adjustableRight, flowerLeft, flowerRight;
-    public final RevColorSensorV3 colorl, colorr;
+//    public final RevColorSensorV3 colorl, colorr;
     public static double inIntakePower = 1, inTransferPower = 0, outIntakePower = -1, outTransferPower = -0.5, shootIntakePower = 0.7, shootTransferPower = 0.7, passiveIntakePower = 0.25, passiveTransferPower = 0;
-    public static double gateOpen = 0.6, gateClosed = 0.7;
+    public static double gateOpen = 0.7, gateClosed = 0.85;
     public static double adjustableDown = 0.62, adjustableUp = 0.33;
-    public static double flowerDown = 0.365, flowerUp = 0.61;
+    public static double flowerDown = 0.4, flowerUp = 0.65;
     public static double leftThres = 34.0, rightThres = 40.0;
 
     public Intake(HardwareMap hardwareMap) {
@@ -29,12 +29,12 @@ public class Intake {
         t = new CachedMotor(hardwareMap.get(DcMotorEx.class, "transfer"), 0.01);
         i.setDirection(DcMotorSimple.Direction.REVERSE);
         gate = hardwareMap.get(Servo.class, "gate");
-        flowerLeft = hardwareMap.get(Servo.class, "adjLeft");
-        flowerRight = hardwareMap.get(Servo.class, "adjRight");
-        adjustableLeft = hardwareMap.get(Servo.class, "flowerLeft");
-        adjustableRight = hardwareMap.get(Servo.class, "flowerRight");
-        colorl = hardwareMap.get(RevColorSensorV3.class, "colorl");
-        colorr = hardwareMap.get(RevColorSensorV3.class, "colorr");
+        flowerLeft = hardwareMap.get(Servo.class, "flowerLeft");
+        flowerRight = hardwareMap.get(Servo.class, "flowerRight");
+        adjustableLeft = hardwareMap.get(Servo.class, "adjLeft");
+        adjustableRight = hardwareMap.get(Servo.class, "adjRight");
+//        colorl = hardwareMap.get(RevColorSensorV3.class, "colorl");
+//        colorr = hardwareMap.get(RevColorSensorV3.class, "colorr");
     }
 
     public void in() {
@@ -101,7 +101,8 @@ public class Intake {
     }
 
     public boolean detected() {
-        return colorl.getDistance(DistanceUnit.MM) < leftThres || colorr.getDistance(DistanceUnit.MM) < rightThres;
+        //return colorl.getDistance(DistanceUnit.MM) < leftThres || colorr.getDistance(DistanceUnit.MM) < rightThres;
+        return false;
     }
 
 

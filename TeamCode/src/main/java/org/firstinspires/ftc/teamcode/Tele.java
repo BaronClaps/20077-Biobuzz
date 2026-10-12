@@ -15,7 +15,7 @@ public class Tele extends OpMode {
 
     private final Alliance alliance;
     private Robot robot;
-    public static Pose start = new Pose(141.5-6.5,141.5-8, Math.toRadians(270));
+    public static Pose start = new Pose(70.75, 70.75, Math.toRadians(90));
     private IntakeMode intakeMode = IntakeMode.STOP;
     private Timer transferTimer = new Timer();
     private boolean previouslyDetected = false, shooter = true, flower = false, adjustable = true;
@@ -121,6 +121,9 @@ public class Tele extends OpMode {
             robot.shooter.disable();
         }
 
+        if (gamepad1.xWasPressed())
+            robot.pose(new Pose(70.75, 70.75, Math.toRadians(90)));
+
         robot.turret.face(AimTargets.target(alliance, robot.pose()), robot.pose());
         robot.update();
 
@@ -129,6 +132,7 @@ public class Tele extends OpMode {
         telemetry.addData("Turret Position", robot.turret.position());
         telemetry.addData("Loop Time HZ", 1000/robot.loopTime);
         telemetry.addData("Intake Mode", intakeMode);
+        telemetry.addData("Shooter Velocity", robot.shooter.velocity());
         telemetry.update();
     }
 }

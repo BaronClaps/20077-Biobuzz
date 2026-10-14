@@ -1,16 +1,21 @@
 package org.firstinspires.ftc.teamcode;
 
+import com.acmerobotics.dashboard.config.Config;
 import com.pedropathing.math.Pose;
 
 import org.firstinspires.ftc.teamcode.utils.Alliance;
 
+@Config
 public class AimTargets {
-    public static Pose blueScoring = new Pose(84, 80);
-    public static Pose redScoring = new Pose(58, 80);
-    public static Pose blueAudience = new Pose(84, 62);
-    public static Pose redAudience = new Pose(58, 62);
+    public final static Pose center = new Pose(70.75, 70.75);
+    public static double xOffset = 12, yOffset = 10;
 
     public static Pose target(Alliance a, Pose currentPose) {
+        Pose blueScoring = center.plus(new Pose(xOffset, yOffset));
+        Pose redScoring = center.plus(new Pose(-xOffset, yOffset));
+        Pose blueAudience = center.plus(new Pose(xOffset, -yOffset));
+        Pose redAudience = center.plus(new Pose(-xOffset, -yOffset));
+
         if (a == Alliance.BLUE) {
             if (currentPose.y() > 70.75) {
                 return blueScoring;

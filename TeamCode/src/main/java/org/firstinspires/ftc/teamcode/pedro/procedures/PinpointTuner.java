@@ -232,8 +232,8 @@ class PinpointOffsets extends TuningOpMode<List<Double>> {
     protected List<Double> runTuningOpMode() throws InterruptedException {
         PinpointConfig config = new PinpointConfig(c -> {
             c.name.set(name);
-            c.xPodDirection.set(forwardPodReversed ? GoBildaPinpointDriver.EncoderDirection.REVERSED : GoBildaPinpointDriver.EncoderDirection.FORWARD);
-            c.yPodDirection.set(strafePodReversed ? GoBildaPinpointDriver.EncoderDirection.REVERSED : GoBildaPinpointDriver.EncoderDirection.FORWARD);
+            c.xPodDirection.set(GoBildaPinpointDriver.EncoderDirection.REVERSED);
+            c.yPodDirection.set(GoBildaPinpointDriver.EncoderDirection.FORWARD);
             if (customPodScalar.isPresent()) {
                 c.encoderResolutionUnit.set(DistanceUnit.INCH);
                 c.ticksPerUnit.set(OptionalDouble.of(customPodScalar.getAsDouble()));

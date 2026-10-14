@@ -18,8 +18,8 @@ public class Intake {
     public final CachedMotor i, t;
     public final Servo gate, adjustableLeft, adjustableRight, flowerLeft, flowerRight;
 //    public final RevColorSensorV3 colorl, colorr;
-    public static double inIntakePower = 1, inTransferPower = 0, outIntakePower = -1, outTransferPower = -0.5, shootIntakePower = 0.7, shootTransferPower = 0.7, passiveIntakePower = 0.25, passiveTransferPower = 0;
-    public static double gateOpen = 0.7, gateClosed = 0.85;
+    public static double inIntakePower = 1, inTransferPower = 0.25, outIntakePower = -1, outTransferPower = -0.5, shootIntakePower = 1, shootTransferPower = 0.5, passiveIntakePower = 0.25, passiveTransferPower = 0;
+    public static double gateOpen = 0.775, gateClosed = 0.85;
     public static double adjustableDown = 0.62, adjustableUp = 0.33;
     public static double flowerDown = 0.4, flowerUp = 0.65;
     public static double leftThres = 34.0, rightThres = 40.0;

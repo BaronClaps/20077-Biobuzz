@@ -10,7 +10,7 @@ import org.firstinspires.ftc.teamcode.subsystem.Intake;
 public class PivotTest extends OpMode {
     Intake intake;
 
-    public static double adjustable = 0.5, flower = 0.5;
+    public static double adjustable = 0.5, flower = 0.45;
 
     @Override
     public void init() {
@@ -34,6 +34,15 @@ public class PivotTest extends OpMode {
             intake.open();
         else if (gamepad1.leftTriggerWasPressed())
             intake.close();
+
+        if(gamepad1.dpadDownWasPressed())
+            flower -= 0.05;
+        else if(gamepad1.dpadUpWasPressed())
+            flower += 0.05;
+        else if(gamepad1.dpadLeftWasPressed())
+            adjustable -= 0.05;
+        else if(gamepad1.dpadRightWasPressed())
+            adjustable += 0.05;
 
         intake.setFlower(flower);
         intake.setAdjustable(adjustable);

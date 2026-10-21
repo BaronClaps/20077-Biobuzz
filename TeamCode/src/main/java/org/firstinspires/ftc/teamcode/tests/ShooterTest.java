@@ -8,21 +8,29 @@ import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 
 import org.firstinspires.ftc.teamcode.subsystem.Intake;
 import org.firstinspires.ftc.teamcode.subsystem.Shooter;
+import org.firstinspires.ftc.teamcode.subsystem.Turret;
 
 @Config
 @TeleOp(name = "Shooter Test", group = "Tests")
 public class ShooterTest extends OpMode {
     Shooter shooter;
     Intake intake;
+    Turret turret;
     MultipleTelemetry telemetryM;
-    public static double velocity = 0, power = 0, mode = 0;
+    public static double velocity = 1400, power = 0, mode = 0, hood = 0.3;
 
     @Override
     public void init() {
         shooter = new Shooter(hardwareMap);
         intake = new Intake(hardwareMap);
+        turret = new Turret(hardwareMap);
+
+        turret.angle(0);
+
+        intake.raiseAdjustable();
 
         shooter.disable();
+        shooter.hood(0.3);
 
         telemetryM = new MultipleTelemetry(telemetry, FtcDashboard.getInstance().getTelemetry());
     }
@@ -40,6 +48,14 @@ public class ShooterTest extends OpMode {
 
         if (gamepad1.dpadRightWasPressed())
             power += 0.1;
+
+        if (gamepad1.rightTriggerWasPressed())
+            hood += 0.05;
+
+        if (gamepad1.leftTriggerWasPressed())
+            hood -= 0.05;
+
+        shooter.hood(hood);
 
         if (mode == 0) {
             shooter.disable();
@@ -72,6 +88,7 @@ public class ShooterTest extends OpMode {
         telemetryM.addData("Target Velocity", shooter.target());
         telemetryM.addData("Current Velocity", shooter.velocity());
         telemetryM.addData("Target Power", power);
+        telemetryM.addData("Hood Position", shooter.hood());
         telemetryM.update();
     }
 }

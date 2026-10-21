@@ -6,20 +6,24 @@ import com.pedropathing.revhub.drivetrains.CachedMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.HardwareMap;
+import com.qualcomm.robotcore.hardware.Servo;
 
 import static com.pedropathing.ivy.commands.Commands.instant;
 
 @Config
 public class Shooter {
     private final CachedMotor top, bottom;
-    private double target = 0, current = 0;
-    public static double kS = 0.129403, kV = 0.00042071, kP = 0.009, useRaw = 40, targetThreshold = 40;
+    private final Servo hood;
+    private double target = 0, current = 0, hoodPosition;
+    public static double kS = 0.082611, kV = 0.00045209, kP = 0.0192, useRaw = 40, targetThreshold = 40;
+    public static double hoodMin = 0, hoodMax = 1;
     public boolean activated = false;
 
     public Shooter(HardwareMap hardwareMap) {
         top = new CachedMotor(hardwareMap.get(DcMotorEx.class, "shooterTop"), 0.01);
         bottom = new CachedMotor(hardwareMap.get(DcMotorEx.class, "shooterBottom"), 0.01);
-        top.setDirection(DcMotorSimple.Direction.REVERSE);
+        bottom.setDirection(DcMotorSimple.Direction.REVERSE);
+        hood = hardwareMap.get(Servo.class, "hood");
     }
 
     public void update() {
@@ -66,6 +70,16 @@ public class Shooter {
 
     public void disable() {
         activated = false;
+    }
+
+    public void hood(double position) {
+        double clamped = position;
+        hood.setPosition(clamped);
+        hoodPosition = clamped;
+    }
+
+    public double hood() {
+        return hoodPosition;
     }
 
     public CommandBuilder enable = instant(this::enable);

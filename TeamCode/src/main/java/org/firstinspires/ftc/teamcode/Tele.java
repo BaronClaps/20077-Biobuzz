@@ -15,7 +15,7 @@ public class Tele extends OpMode {
 
     private final Alliance alliance;
     private Robot robot;
-    public static Pose start = new Pose(70.75, 70.75, Math.toRadians(90));
+    public static Pose start = new Pose(0, 0, Math.toRadians(0));
     private IntakeMode intakeMode = IntakeMode.STOP;
     private Timer transferTimer = new Timer();
     private boolean previouslyDetected = false, shooter = true, flower = false, adjustable = true;

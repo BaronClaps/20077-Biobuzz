@@ -31,13 +31,13 @@ public class ThreeTipsPaths {
             poseFactory = PoseFactory.degrees().mirrorX(70.75).mirrorY(70.75);
         }
 
-        start = poseFactory.of(120, 135.5, 90);
+        start = poseFactory.of(118, 134, 0);
         spikeIntake = poseFactory.of(130, 135.5, 0);
-        spikeScore = poseFactory.of(94, 20, -90);
+        spikeScore = poseFactory.of(95, 20, -90);
         spikeScoreControl1 = poseFactory.of(110, 45, 0);
         spikeScoreSegment1Heading = poseFactory.of(94, 20, 0);
         spikeScoreSegment2Target = poseFactory.of(94, 0, 0);
-        flower1Intake = poseFactory.of(94, 14, 270);
+        flower1Intake = poseFactory.of(95, 13, 270);
         flower2Intake = poseFactory.of(128, 94, 0);
         flower2IntakeControl1 = poseFactory.of(115, 35, 0);
         flower2IntakeControl2 = poseFactory.of(112, 100, 0);

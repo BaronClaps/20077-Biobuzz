@@ -10,8 +10,9 @@ import static com.pedropathing.utils.Angle.normalizeSigned;
 
 public class Turret {
     private final Servo left, right;
-    private double position = 0.5;
+    private double position = 0.535;
     private static final double ppr = (.78 - .5) / (Math.PI / 2.0);
+    public static final double center = 0.535;
 
     public Turret(HardwareMap hardwareMap) {
         left = hardwareMap.get(Servo.class, "turretLeft");
@@ -33,12 +34,12 @@ public class Turret {
     }
 
     public double angle() {
-        return normalizeSigned((position() - 0.5) / ppr);
+        return normalizeSigned((position() - center) / ppr);
     }
 
     public void angle(double radians) {
         radians = normalizeSigned(radians);
-        position(0.5 + ppr * radians);
+        position(center + ppr * radians);
     }
 
     public void face(Pose targetPose, Pose robotPose) {

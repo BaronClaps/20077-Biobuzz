@@ -17,7 +17,7 @@ public class ShooterTest extends OpMode {
     Intake intake;
     Turret turret;
     MultipleTelemetry telemetryM;
-    public static double velocity = 1400, power = 0, mode = 0, hood = 0.3;
+    public static double velocity = 1520, power = 0, mode = 0, hood = 0.25;
 
     @Override
     public void init() {
@@ -28,9 +28,11 @@ public class ShooterTest extends OpMode {
         turret.angle(0);
 
         intake.raiseAdjustable();
+        intake.lowerFlower();
+        intake.open();
 
         shooter.disable();
-        shooter.hood(0.3);
+        shooter.hood(0.5);
 
         telemetryM = new MultipleTelemetry(telemetry, FtcDashboard.getInstance().getTelemetry());
     }
@@ -56,6 +58,7 @@ public class ShooterTest extends OpMode {
             hood -= 0.05;
 
         shooter.hood(hood);
+        hood = shooter.hood();
 
         if (mode == 0) {
             shooter.disable();

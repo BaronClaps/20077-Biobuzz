@@ -15,11 +15,11 @@ public class Tele extends OpMode {
 
     private final Alliance alliance;
     private Robot robot;
-    public static Pose start = new Pose(0, 0, Math.toRadians(0));
+    public static Pose start = new Pose(59, 8, Math.toRadians(90));
     private IntakeMode intakeMode = IntakeMode.STOP;
     private Timer transferTimer = new Timer();
     private boolean previouslyDetected = false, shooter = true, flower = false, adjustable = true;
-    public static double targetVelocity = 1500.0;
+    public static double targetVelocity = 1540.0;
 
     public Tele(Alliance alliance) {
         this.alliance = alliance;
@@ -36,6 +36,7 @@ public class Tele extends OpMode {
         robot.intake.lowerAdjustable();
 //        robot.intake.in();
         robot.shooter.enable();
+        robot.shooter.hood(0.25);
         robot.intake.close();
         robot.update();
     }
@@ -49,14 +50,14 @@ public class Tele extends OpMode {
                 robot.intake.in();
                 if (gamepad1.leftTriggerWasPressed())
                     intakeMode = IntakeMode.STOP;
-                if (robot.loops % 3 == 0) {
-                    boolean detected = robot.intake.detected();
-                    if (detected && previouslyDetected) {
-                        intakeMode = IntakeMode.PASSIVE;
-                        break;
-                    }
-                    previouslyDetected = detected;
-                }
+//                if (robot.loops % 3 == 0) {
+//                    boolean detected = robot.intake.detected();
+//                    if (detected && previouslyDetected) {
+//                        intakeMode = IntakeMode.PASSIVE;
+//                        break;
+//                    }
+//                    previouslyDetected = detected;
+//                }
                 break;
             case OUT:
                 robot.intake.out();
@@ -82,8 +83,8 @@ public class Tele extends OpMode {
         }
 
         if (gamepad1.rightTriggerWasPressed()) {
-            intakeMode = IntakeMode.TRANSFER;
             transferTimer.reset();
+            intakeMode = IntakeMode.TRANSFER;
             robot.intake.open();
         }
 
@@ -123,6 +124,12 @@ public class Tele extends OpMode {
 
         if (gamepad1.xWasPressed())
             robot.pose(new Pose(70.75, 70.75, Math.toRadians(90)));
+
+        if (gamepad1.dpadLeftWasPressed())
+            targetVelocity += 20;
+
+        if (gamepad1.dpadRightWasPressed())
+            targetVelocity -= 20;
 
         robot.turret.face(AimTargets.target(alliance, robot.pose()), robot.pose());
         robot.update();

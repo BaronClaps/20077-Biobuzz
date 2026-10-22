@@ -9,14 +9,14 @@ import org.firstinspires.ftc.teamcode.subsystem.Turret;
 @TeleOp(name = "Turret Test", group = "Tests")
 public class TurretTest extends OpMode {
     Turret turret;
-    public static double angleDegrees = 0, position = 0.5;
+    public static double angleDegrees = 0, position = Turret.center;
     public static boolean isAngle = false;
 
     @Override
     public void init() {
         turret = new Turret(hardwareMap);
 
-        turret.position(0.5);
+        turret.position(Turret.center);
     }
 
     @Override

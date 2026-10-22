@@ -16,7 +16,7 @@ public class Shooter {
     private final Servo hood;
     private double target = 0, current = 0, hoodPosition;
     public static double kS = 0.082611, kV = 0.00045209, kP = 0.0192, useRaw = 40, targetThreshold = 40;
-    public static double hoodMin = 0, hoodMax = 1;
+    public static double hoodMin = 0.2, hoodMax = 0.5;
     public boolean activated = false;
 
     public Shooter(HardwareMap hardwareMap) {
@@ -73,7 +73,7 @@ public class Shooter {
     }
 
     public void hood(double position) {
-        double clamped = position;
+        double clamped = Math.max(hoodMin, Math.min(hoodMax, position));
         hood.setPosition(clamped);
         hoodPosition = clamped;
     }

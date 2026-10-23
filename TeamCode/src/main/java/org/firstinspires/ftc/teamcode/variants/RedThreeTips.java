@@ -1,7 +1,7 @@
-package org.firstinspires.ftc.teamcode.autos;
+package org.firstinspires.ftc.teamcode.variants;
 
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
-import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
+import org.firstinspires.ftc.teamcode.autos.ThreeTips;
 import org.firstinspires.ftc.teamcode.utils.Alliance;
 
 @Autonomous

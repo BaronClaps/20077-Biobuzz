@@ -1,9 +1,9 @@
 package org.firstinspires.ftc.teamcode.autos;
 
 import static com.pedropathing.ivy.commands.Commands.waitMs;
-import static com.pedropathing.ivy.commands.Commands.waitUntil;
 import static com.pedropathing.ivy.groups.Groups.sequential;
 
+import com.pedropathing.ivy.CommandBuilder;
 import com.pedropathing.ivy.commands.Commands;
 
 import org.firstinspires.ftc.teamcode.Robot;
@@ -14,6 +14,7 @@ public class ThreeTips extends CommandOpMode {
     final Alliance alliance;
     ThreeTipsPaths paths;
     Robot robot;
+    double velocity = 1560, hood = 0.25;
 
     public ThreeTips(Alliance alliance) {
         this.alliance = alliance;
@@ -33,18 +34,20 @@ public class ThreeTips extends CommandOpMode {
 
         schedule(
                 sequential(
+                        setup(1560, 0.25, -120),
 //                robot.shoot(),
 //                robot.intake(),
                         paths.spikeIntake(),
 //                robot.shoot(),
 //                robot.intake(),
+                        setup(1560, 0.35, -165),
                         paths.spike1Score(),
-waitMs(2000),
-robot.intake.lowerFlower,
+                        robot.intake.lowerFlower,
 //                robot.shoot(),
 //                robot.intake(),
+                        setup(1560, 0.35, -165),
                         paths.flower1Intake(),
-waitMs(2000)
+                        waitMs(2000)
 //                robot.shoot(),
 //                robot.intake(),
 //                        paths.flower2Intake(),
@@ -57,8 +60,17 @@ waitMs(2000)
                 ),
                 Commands.infinite(() -> {
                             robot.update();
+                            robot.shooter.enable();
                         }
                 )
         );
+    }
+
+    public CommandBuilder setup(double velocity, double hood, double degrees) {
+        return Commands.infinite(() -> {
+            robot.shooter.hood(hood);
+            robot.shooter.target(velocity);
+            robot.turret.angle(Math.toRadians(degrees));
+        });
     }
 }

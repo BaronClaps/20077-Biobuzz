@@ -8,7 +8,7 @@ import org.firstinspires.ftc.teamcode.utils.Alliance;
 @Config
 public class AimTargets {
     public final static Pose center = new Pose(70.75, 70.75);
-    public static double xOffset = 12, yOffset = 10;
+    public static double xOffset = 13, yOffset = 10;
 
     public static Pose target(Alliance a, Pose currentPose) {
         Pose blueScoring = center.plus(new Pose(xOffset, yOffset));

@@ -45,43 +45,6 @@ public class Tele extends OpMode {
     public void loop() {
         robot.follower.manual(-gamepad1.left_stick_y, -gamepad1.left_stick_x, -gamepad1.right_stick_x * .67);
 
-        switch (intakeMode) {
-            case IN:
-                robot.intake.in();
-                if (gamepad1.leftTriggerWasPressed())
-                    intakeMode = IntakeMode.STOP;
-//                if (robot.loops % 3 == 0) {
-//                    boolean detected = robot.intake.detected();
-//                    if (detected && previouslyDetected) {
-//                        intakeMode = IntakeMode.PASSIVE;
-//                        break;
-//                    }
-//                    previouslyDetected = detected;
-//                }
-                break;
-            case OUT:
-                robot.intake.out();
-                if (gamepad1.dpadDownWasPressed()) {
-                    intakeMode = IntakeMode.STOP;
-                    break;
-                }
-                break;
-            case STOP:
-                robot.intake.stop();
-                if (gamepad1.leftTriggerWasPressed())
-                    intakeMode = IntakeMode.IN;
-                if (gamepad1.dpadDownWasPressed())
-                    intakeMode = IntakeMode.OUT;
-                break;
-            case PASSIVE:
-                if (gamepad1.leftTriggerWasPressed())
-                    intakeMode = IntakeMode.STOP;
-                robot.intake.passive();
-            case TRANSFER:
-                robot.intake.transfer();
-                break;
-        }
-
         if (gamepad1.rightTriggerWasPressed()) {
             transferTimer.reset();
             intakeMode = IntakeMode.TRANSFER;
@@ -91,6 +54,43 @@ public class Tele extends OpMode {
         if (transferTimer.seconds() > 2.0 && intakeMode == IntakeMode.TRANSFER) {
             intakeMode = IntakeMode.IN;
             robot.intake.close();
+        }
+
+        boolean inPressed = gamepad1.leftTriggerWasPressed();
+        boolean outPressed = gamepad1.dpadDownWasPressed();
+
+        if (intakeMode != IntakeMode.TRANSFER) {
+            if (inPressed) {
+                intakeMode = (intakeMode == IntakeMode.IN) ? IntakeMode.STOP : IntakeMode.IN;
+            } else if (outPressed) {
+                intakeMode = (intakeMode == IntakeMode.OUT) ? IntakeMode.STOP : IntakeMode.OUT;
+            }
+        }
+
+        switch (intakeMode) {
+            case IN:
+                robot.intake.in();
+//        if (robot.loops % 3 == 0) {
+//            boolean detected = robot.intake.detected();
+//            if (detected && previouslyDetected) {
+//                intakeMode = IntakeMode.PASSIVE;
+//                break;
+//            }
+//            previouslyDetected = detected;
+//        }
+                break;
+            case OUT:
+                robot.intake.out();
+                break;
+            case STOP:
+                robot.intake.stop();
+                break;
+            case PASSIVE:
+                robot.intake.passive();
+                break;
+            case TRANSFER:
+                robot.intake.transfer();
+                break;
         }
 
         if (gamepad1.rightBumperWasPressed()) {

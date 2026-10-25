@@ -8,6 +8,10 @@ import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.qualcomm.robotcore.hardware.Servo;
 
+import org.firstinspires.ftc.robotcore.external.navigation.CurrentUnit;
+
+import java.util.Locale;
+
 import static com.pedropathing.ivy.commands.Commands.instant;
 
 @Config
@@ -82,6 +86,14 @@ public class Shooter {
         return hoodPosition;
     }
 
-    public CommandBuilder enable = instant(this::enable);
+    public double current() {
+        return top.raw().getCurrent(CurrentUnit.AMPS) + bottom.raw().getCurrent(CurrentUnit.AMPS);
+    }
+
+    public String currentBreakdown() {
+        return String.format(Locale.US, "shooterTop: %.2fA\nshooterBottom: %.2fA", top.raw().getCurrent(CurrentUnit.AMPS), bottom.raw().getCurrent(CurrentUnit.AMPS));
+    }
+
+    public CommandBuilder enable =instant(this::enable);
     public CommandBuilder disable = instant(this::disable);
 }

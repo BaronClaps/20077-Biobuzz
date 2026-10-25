@@ -11,7 +11,10 @@ import com.qualcomm.robotcore.hardware.Servo;
 
 import static com.pedropathing.ivy.commands.Commands.instant;
 
+import org.firstinspires.ftc.robotcore.external.navigation.CurrentUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
+
+import java.util.Locale;
 
 @Config
 public class Intake {
@@ -98,6 +101,14 @@ public class Intake {
     public void lowerAdjustable() {
         adjustableLeft.setPosition(adjustableDown);
         adjustableRight.setPosition(adjustableDown);
+    }
+
+    public double current() {
+        return i.raw().getCurrent(CurrentUnit.AMPS) + t.raw().getCurrent(CurrentUnit.AMPS);
+    }
+
+    public String currentBreakdown() {
+        return String.format(Locale.US, "intake: %.2fA\ntransfer: %.2fA", i.raw().getCurrent(CurrentUnit.AMPS), t.raw().getCurrent(CurrentUnit.AMPS));
     }
 
     public boolean detected() {

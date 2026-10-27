@@ -29,26 +29,32 @@ public class ThreeTips extends CommandOpMode {
         robot.turret.angle(Math.toRadians(-120));
         robot.intake.close();
         robot.intake.stop();
-        robot.intake.raiseAdjustable();
+        robot.intake.lowerAdjustable();
         robot.intake.raiseFlower();
 
         schedule(
                 sequential(
-                        setup(1560, 0.25, -120),
-//                robot.shoot(),
-//                robot.intake(),
+                        setup(1540, 0.25, -118),
+                        waitMs(2000),
+                robot.shoot(),
+                robot.shoot(),
+                robot.intake(),
                         paths.spikeIntake(),
-//                robot.shoot(),
-//                robot.intake(),
-                        setup(1560, 0.35, -165),
+                        setup(1540, 0.25, -177.5),
                         paths.spike1Score(),
+                        robot.intake.raiseAdjustable,
                         robot.intake.lowerFlower,
-//                robot.shoot(),
-//                robot.intake(),
-                        setup(1560, 0.35, -165),
+waitMs(1000),
+                robot.shoot(),
+                        robot.shoot(),
+                        waitMs(500),
+                robot.intake(),
+                        waitMs(500),
                         paths.flower1Intake(),
-                        waitMs(2000)
-//                robot.shoot(),
+                        waitMs(2000),
+                        setup(1500, 0.25, -167),
+                robot.shoot(),
+robot.shoot()
 //                robot.intake(),
 //                        paths.flower2Intake(),
 //                robot.shoot(),
@@ -67,7 +73,7 @@ public class ThreeTips extends CommandOpMode {
     }
 
     public CommandBuilder setup(double velocity, double hood, double degrees) {
-        return Commands.infinite(() -> {
+        return Commands.instant(() -> {
             robot.shooter.hood(hood);
             robot.shooter.target(velocity);
             robot.turret.angle(Math.toRadians(degrees));

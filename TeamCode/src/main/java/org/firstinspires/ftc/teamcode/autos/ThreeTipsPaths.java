@@ -7,8 +7,11 @@ import com.pedropathing.follower.Follower;
 import com.pedropathing.ivy.CommandBuilder;
 import com.pedropathing.math.Pose;
 import com.pedropathing.paths.interpolator.Interpolator;
+
+import org.firstinspires.ftc.teamcode.pedro.Constants;
 import org.firstinspires.ftc.teamcode.utils.Alliance;
 
+import static com.pedropathing.ivy.commands.Commands.waitMs;
 import static com.pedropathing.ivy.pedro.PedroCommands.follow;
 
 public class ThreeTipsPaths {
@@ -31,13 +34,13 @@ public class ThreeTipsPaths {
             poseFactory = PoseFactory.degrees().mirrorX(70.75).mirrorY(70.75);
         }
 
-        start = poseFactory.of(118, 134, 0);
-        spikeIntake = poseFactory.of(130, 135.5, 0);
-        spikeScore = poseFactory.of(95, 20, -90);
+        start = poseFactory.of(141.5-(32.5+7), 141.5-6.7, 0);
+        spikeIntake = poseFactory.of(121.5, 135.5, 0);
+        spikeScore = poseFactory.of(85, 20, 270);
         spikeScoreControl1 = poseFactory.of(110, 45, 0);
         spikeScoreSegment1Heading = poseFactory.of(94, 20, 0);
-        spikeScoreSegment2Target = poseFactory.of(94, 0, 0);
-        flower1Intake = poseFactory.of(95, 13, 270);
+        spikeScoreSegment2Target = poseFactory.of(85, 0, 0);
+        flower1Intake = poseFactory.of(85, 13, 270);
         flower2Intake = poseFactory.of(128, 94, 0);
         flower2IntakeControl1 = poseFactory.of(115, 35, 0);
         flower2IntakeControl2 = poseFactory.of(112, 100, 0);
@@ -59,7 +62,7 @@ public class ThreeTipsPaths {
     }
 
     public CommandBuilder spikeIntake() {
-        return follow(follower, Paths.line(start, spikeIntake).constant(spikeIntake));
+        return follow(follower, Paths.line(start, spikeIntake).constant(spikeIntake).with(Constants.foresightConfig.maxPathSpeed.at(0.5))).raceWith(waitMs(2000));
     }
 
     public CommandBuilder spike1Score() {

@@ -1,6 +1,8 @@
 package org.firstinspires.ftc.teamcode;
 
+import com.acmerobotics.dashboard.FtcDashboard;
 import com.acmerobotics.dashboard.config.Config;
+import com.acmerobotics.dashboard.telemetry.MultipleTelemetry;
 import com.pedropathing.math.Pose;
 import com.pedropathing.utils.Timer;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
@@ -14,12 +16,13 @@ public class Tele extends OpMode {
     }
 
     private final Alliance alliance;
+    private MultipleTelemetry telemetryM;
     private Robot robot;
     public static Pose start = new Pose(59, 8, Math.toRadians(90));
     private IntakeMode intakeMode = IntakeMode.STOP;
     private Timer transferTimer = new Timer();
-    private boolean previouslyDetected = false, shooter = true, flower = false, adjustable = true;
-    public static double targetVelocity = 1540.0;
+    private boolean previouslyDetected = false, shooter = true, flower = false, adjustable = true, opened = false;
+    public static double targetVelocity = 1540.0, hoodAngle = 0.25, angleOffset = 0.0;
 
     public Tele(Alliance alliance) {
         this.alliance = alliance;
@@ -29,6 +32,8 @@ public class Tele extends OpMode {
     public void init() {
         robot = new Robot(hardwareMap, alliance);
         robot.pose(start);
+
+        telemetryM = new MultipleTelemetry(telemetry, FtcDashboard.getInstance().getTelemetry());
     }
 
     public void start() {
@@ -36,7 +41,7 @@ public class Tele extends OpMode {
         robot.intake.lowerAdjustable();
 //        robot.intake.in();
         robot.shooter.enable();
-        robot.shooter.hood(0.25);
+        robot.shooter.hood(hoodAngle);
         robot.intake.close();
         robot.update();
     }
@@ -47,13 +52,19 @@ public class Tele extends OpMode {
 
         if (gamepad1.rightTriggerWasPressed()) {
             transferTimer.reset();
-            intakeMode = IntakeMode.TRANSFER;
             robot.intake.open();
+            intakeMode = IntakeMode.STOP;
+            opened = false;
         }
 
         if (transferTimer.seconds() > 2.0 && intakeMode == IntakeMode.TRANSFER) {
             intakeMode = IntakeMode.IN;
             robot.intake.close();
+        }
+
+        if (transferTimer.seconds() > 0.1 && !opened && intakeMode == IntakeMode.STOP) {
+            intakeMode = IntakeMode.TRANSFER;
+            opened = true;
         }
 
         boolean inPressed = gamepad1.leftTriggerWasPressed();
@@ -66,6 +77,9 @@ public class Tele extends OpMode {
                 intakeMode = (intakeMode == IntakeMode.OUT) ? IntakeMode.STOP : IntakeMode.OUT;
             }
         }
+
+        robot.intake.open();
+        intakeMode = IntakeMode.TRANSFER;
 
         switch (intakeMode) {
             case IN:
@@ -118,6 +132,7 @@ public class Tele extends OpMode {
         if (shooter) {
             robot.shooter.enable();
             robot.shooter.target(targetVelocity);
+            robot.shooter.hood(hoodAngle);
         } else {
             robot.shooter.disable();
         }
@@ -126,20 +141,23 @@ public class Tele extends OpMode {
             robot.pose(new Pose(70.75, 70.75, Math.toRadians(90)));
 
         if (gamepad1.dpadLeftWasPressed())
-            targetVelocity += 20;
+            angleOffset += 3;
 
         if (gamepad1.dpadRightWasPressed())
-            targetVelocity -= 20;
+            angleOffset -= 3;
 
-        robot.turret.face(AimTargets.target(alliance, robot.pose()), robot.pose());
+        robot.turret.angle(robot.turret.returnFace(AimTargets.target(alliance, robot.pose()), robot.pose()) + Math.toRadians(angleOffset));
         robot.update();
 
-        telemetry.addData("Pose", robot.pose());
-        telemetry.addData("Turret Angle", Math.toDegrees(robot.turret.angle()));
-        telemetry.addData("Turret Position", robot.turret.position());
-        telemetry.addData("Loop Time HZ", 1000/robot.loopTime);
-        telemetry.addData("Intake Mode", intakeMode);
-        telemetry.addData("Shooter Velocity", robot.shooter.velocity());
-        telemetry.update();
+        telemetryM.addData("Pose", robot.pose());
+        telemetryM.addData("Turret Angle", Math.toDegrees(robot.turret.angle()));
+        telemetryM.addData("Turret Position", robot.turret.position());
+        telemetryM.addData("Loop Time HZ", 1000/robot.loopTime);
+        telemetryM.addData("Intake Mode", intakeMode);
+        telemetryM.addData("Shooter Velocity", robot.shooter.velocity());
+        telemetryM.addData("Distance from Target", AimTargets.target(alliance, robot.pose()).distance(robot.pose()));
+        telemetryM.addData("X & Y from Target", AimTargets.target(alliance, robot.pose()).minus(robot.pose()));
+        telemetryM.addLine(robot.currentBreakdown());
+        telemetryM.update();
     }
 }

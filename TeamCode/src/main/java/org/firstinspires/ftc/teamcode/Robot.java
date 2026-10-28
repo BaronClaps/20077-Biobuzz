@@ -74,7 +74,7 @@ public class Robot {
         return sequential(
                 intake.open,
                 intake.transfer,
-                waitMs(750),
+                waitMs(2000),
                 intake.in,
                 intake.close
         );

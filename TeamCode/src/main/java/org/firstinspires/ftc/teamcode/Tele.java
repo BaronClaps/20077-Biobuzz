@@ -78,20 +78,17 @@ public class Tele extends OpMode {
             }
         }
 
-        robot.intake.open();
-        intakeMode = IntakeMode.TRANSFER;
-
         switch (intakeMode) {
             case IN:
                 robot.intake.in();
-//        if (robot.loops % 3 == 0) {
-//            boolean detected = robot.intake.detected();
-//            if (detected && previouslyDetected) {
-//                intakeMode = IntakeMode.PASSIVE;
-//                break;
-//            }
-//            previouslyDetected = detected;
-//        }
+                if (robot.loops % 3 == 0) {
+                    boolean detected = robot.intake.detected();
+                    if (detected && previouslyDetected) {
+                        intakeMode = IntakeMode.PASSIVE;
+                        break;
+                    }
+                    previouslyDetected = detected;
+                }
                 break;
             case OUT:
                 robot.intake.out();
@@ -152,7 +149,7 @@ public class Tele extends OpMode {
         telemetryM.addData("Pose", robot.pose());
         telemetryM.addData("Turret Angle", Math.toDegrees(robot.turret.angle()));
         telemetryM.addData("Turret Position", robot.turret.position());
-        telemetryM.addData("Loop Time HZ", 1000/robot.loopTime);
+        telemetryM.addData("Loop Time HZ", 1000 / robot.loopTime);
         telemetryM.addData("Intake Mode", intakeMode);
         telemetryM.addData("Shooter Velocity", robot.shooter.velocity());
         telemetryM.addData("Distance from Target", AimTargets.target(alliance, robot.pose()).distance(robot.pose()));

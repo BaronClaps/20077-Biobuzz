@@ -6,6 +6,7 @@ import com.pedropathing.revhub.drivetrains.CachedMotor;
 import com.qualcomm.hardware.rev.RevColorSensorV3;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
+import com.qualcomm.robotcore.hardware.DigitalChannel;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.qualcomm.robotcore.hardware.Servo;
 
@@ -20,7 +21,7 @@ import java.util.Locale;
 public class Intake {
     public final CachedMotor i, t;
     public final Servo gate, adjustableLeft, adjustableRight, flowerLeft, flowerRight;
-//    public final RevColorSensorV3 colorl, colorr;
+    public final DigitalChannel beam;
     public static double inIntakePower = 1, inTransferPower = 0.5, outIntakePower = -1, outTransferPower = -0.5, shootIntakePower = 0.7, shootTransferPower = 0.4, passiveIntakePower = 0.25, passiveTransferPower = 0;
     public static double gateOpen = 0.77, gateClosed = 0.85;
     public static double adjustableDown = 0.52, adjustableUp = 0.24;
@@ -36,8 +37,7 @@ public class Intake {
         flowerRight = hardwareMap.get(Servo.class, "flowerRight");
         adjustableLeft = hardwareMap.get(Servo.class, "adjLeft");
         adjustableRight = hardwareMap.get(Servo.class, "adjRight");
-//        colorl = hardwareMap.get(RevColorSensorV3.class, "colorl");
-//        colorr = hardwareMap.get(RevColorSensorV3.class, "colorr");
+        beam = hardwareMap.get(DigitalChannel.class, "beam");
     }
 
     public void in() {
@@ -112,8 +112,7 @@ public class Intake {
     }
 
     public boolean detected() {
-        //return colorl.getDistance(DistanceUnit.MM) < leftThres || colorr.getDistance(DistanceUnit.MM) < rightThres;
-        return false;
+        return beam.getState() == false;
     }
 
 

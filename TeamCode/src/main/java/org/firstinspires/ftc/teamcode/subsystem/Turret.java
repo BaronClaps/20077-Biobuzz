@@ -13,6 +13,9 @@ public class Turret {
     private double position = 0.535;
     private static final double ppr = (.78 - .5) / (Math.PI / 2.0);
     public static final double center = 0.535;
+    public static double DEPTH = 10;
+    public static double K = 1.0;
+    public static double MAX_PHI = Math.toRadians(70);
 
     public Turret(HardwareMap hardwareMap) {
         left = hardwareMap.get(Servo.class, "turretLeft");
@@ -54,5 +57,17 @@ public class Turret {
         double robotAngleDiff = normalizeSigned(angleToTargetFromCenter - robotPose.heading());
         robotAngleDiff = Utils.clamp(robotAngleDiff, -Math.PI, Math.PI);
         return robotAngleDiff;
+    }
+
+    public void offset(Pose targetPose, Pose robotPose) {
+        double phi = Utils.clamp(returnFace(robotPose, targetPose), -MAX_PHI, MAX_PHI);
+
+        double off = K * (DEPTH / 2.0) * Math.tan(phi);
+        Pose aim = new Pose(
+                targetPose.x() - off * Math.sin(targetPose.heading()),
+                targetPose.y() + off * Math.cos(targetPose.heading()),
+                targetPose.heading());
+
+        angle(returnFace(aim, robotPose));
     }
 }

@@ -86,6 +86,11 @@ public class Shooter {
         return hoodPosition;
     }
 
+    public void regress(double distance) {
+        hood(0.007682 * distance - 0.1493);
+        target(6.997 * distance + 1163.1);
+    }
+
     public double current() {
         return top.raw().getCurrent(CurrentUnit.AMPS) + bottom.raw().getCurrent(CurrentUnit.AMPS);
     }

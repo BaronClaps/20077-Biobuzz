@@ -10,7 +10,7 @@ import org.firstinspires.ftc.teamcode.subsystem.Intake;
 public class PivotTest extends OpMode {
     Intake intake;
 
-    public static double adjustable = 0.5, flower = 0.45;
+    public static double adjustable = 0.5, flower = 0.46;
 
     @Override
     public void init() {

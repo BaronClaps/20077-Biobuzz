@@ -67,7 +67,7 @@ public class TwoTip extends CommandOpMode {
                                                 )
                                 ),
                         waitMs(2000),
-                        setup(1520, 0.25, 22),
+                        setup(1560, 0.25, 30),
                         paths.score()
                                         .with(
                                                 waitUntil(() -> robot.follower.completion() > 0.2)

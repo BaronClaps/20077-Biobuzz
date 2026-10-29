@@ -17,7 +17,7 @@ public class TwoTipPaths {
     public final PoseFactory poseFactory;
     public final Follower follower;
 
-    public final Pose start, flower1, flower1Control1, flower2Start, flower2, flower2Control1, flower2Control2, scoreStart, score, park, parkSegment2Heading;
+    public final Pose start, flower1, flower1Control1, flower2Start, flower2, flower2Control1, flower2Control2, scoreStart, score, park;
 
     public TwoTipPaths(Follower follower, Alliance alliance) {
         this.follower = follower;
@@ -30,7 +30,7 @@ public class TwoTipPaths {
 
         start = poseFactory.of(88, 134.5, 270);
 
-        flower1 = poseFactory.of(92, 13, 270);
+        flower1 = poseFactory.of(92, 12.5, 270);
         flower1Control1 = poseFactory.of(72, 38, 0);
 
         flower2Start = poseFactory.of(94.33, 14, 270);
@@ -39,10 +39,9 @@ public class TwoTipPaths {
         flower2Control2 = poseFactory.of(112, 96, 0);
 
         scoreStart = poseFactory.of(125, 94.33, 0);
-        score = poseFactory.of(120, 11.5, 45);
+        score = poseFactory.of(112, 11.5, 90);
 
-        park = poseFactory.of(125, 45, -90);
-        parkSegment2Heading = poseFactory.of(125, 45, -90);
+        park = poseFactory.of(125, 24, 90);
     }
 
     public Pose start() {
@@ -75,10 +74,6 @@ public class TwoTipPaths {
     public CommandBuilder park() {
         return follow(follower,
                 Paths.line(score, park)
-                        .heading(
-                                Interpolator.piecewise()
-                                        .until(0.8, Interpolator.tangent)
-                                        .until(1, Interpolator.constant(parkSegment2Heading))
-                        ));
+                        .constant(park));
     }
 }

@@ -21,7 +21,7 @@ public class Intake {
     public static double gateOpen = 0.77, gateClosed = 0.85;
     public static double adjustableDown = 0.52, adjustableUp = 0.24;
     public static double flowerDown = 0.465, flowerUp = 1;
-    public static double hiveMaxVolt = 3.3, hiveMaxDistance = 1000, hiveThreshold = 500;
+    public static double hiveMaxVolt = 3.3, hiveMaxDistance = 5000, hiveThreshold = 650;
 
     public Intake(HardwareMap hardwareMap) {
         i = new CachedMotor(hardwareMap.get(DcMotorEx.class, "intake"), 0.01);

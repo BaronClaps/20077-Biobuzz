@@ -1,7 +1,6 @@
 package org.firstinspires.ftc.teamcode.subsystem;
 
 import com.pedropathing.math.Pose;
-import com.pedropathing.math.Vector;
 import com.pedropathing.utils.Utils;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.qualcomm.robotcore.hardware.Servo;
@@ -13,9 +12,9 @@ public class Turret {
     private double position = 0.535;
     private static final double ppr = (.78 - .5) / (Math.PI / 2.0);
     public static final double center = 0.535;
-    public static double DEPTH = 10;
-    public static double K = 1.0;
-    public static double MAX_PHI = Math.toRadians(70);
+    public static double goalDepth = 10;
+    public static double offsetMultiplier = 1.0;
+    public static double phiLimit = Math.toRadians(45);
 
     public Turret(HardwareMap hardwareMap) {
         left = hardwareMap.get(Servo.class, "turretLeft");
@@ -60,9 +59,9 @@ public class Turret {
     }
 
     public void offset(Pose targetPose, Pose robotPose) {
-        double phi = Utils.clamp(returnFace(robotPose, targetPose), -MAX_PHI, MAX_PHI);
+        double phi = Utils.clamp(returnFace(robotPose, targetPose), -phiLimit, phiLimit);
 
-        double off = K * (DEPTH / 2.0) * Math.tan(phi);
+        double off = offsetMultiplier * (goalDepth / 2.0) * Math.tan(phi);
         Pose aim = new Pose(
                 targetPose.x() - off * Math.sin(targetPose.heading()),
                 targetPose.y() + off * Math.cos(targetPose.heading()),

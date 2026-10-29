@@ -3,17 +3,11 @@ package org.firstinspires.ftc.teamcode.subsystem;
 import com.acmerobotics.dashboard.config.Config;
 import com.pedropathing.ivy.CommandBuilder;
 import com.pedropathing.revhub.drivetrains.CachedMotor;
-import com.qualcomm.hardware.rev.RevColorSensorV3;
-import com.qualcomm.robotcore.hardware.DcMotorEx;
-import com.qualcomm.robotcore.hardware.DcMotorSimple;
-import com.qualcomm.robotcore.hardware.DigitalChannel;
-import com.qualcomm.robotcore.hardware.HardwareMap;
-import com.qualcomm.robotcore.hardware.Servo;
+import com.qualcomm.robotcore.hardware.*;
 
 import static com.pedropathing.ivy.commands.Commands.instant;
 
 import org.firstinspires.ftc.robotcore.external.navigation.CurrentUnit;
-import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
 
 import java.util.Locale;
 
@@ -22,11 +16,12 @@ public class Intake {
     public final CachedMotor i, t;
     public final Servo gate, adjustableLeft, adjustableRight, flowerLeft, flowerRight;
     public final DigitalChannel beam;
+    public final AnalogInput hive;
     public static double inIntakePower = 1, inTransferPower = 0.5, outIntakePower = -1, outTransferPower = -0.5, shootIntakePower = 0.7, shootTransferPower = 0.4, passiveIntakePower = 0.25, passiveTransferPower = 0;
     public static double gateOpen = 0.77, gateClosed = 0.85;
     public static double adjustableDown = 0.52, adjustableUp = 0.24;
     public static double flowerDown = 0.45, flowerUp = 0.7;
-    public static double leftThres = 34.0, rightThres = 40.0;
+    public static double hiveMaxVolt = 3.3, hiveMaxDistance = 1000, hiveThreshold = 500;
 
     public Intake(HardwareMap hardwareMap) {
         i = new CachedMotor(hardwareMap.get(DcMotorEx.class, "intake"), 0.01);
@@ -38,6 +33,7 @@ public class Intake {
         adjustableLeft = hardwareMap.get(Servo.class, "adjLeft");
         adjustableRight = hardwareMap.get(Servo.class, "adjRight");
         beam = hardwareMap.get(DigitalChannel.class, "beam");
+        hive = hardwareMap.get(AnalogInput.class, "hive");
     }
 
     public void in() {
@@ -113,6 +109,14 @@ public class Intake {
 
     public boolean detected() {
         return beam.getState() == false;
+    }
+
+    public boolean hiveDetected() {
+        return hiveDistance() > hiveThreshold;
+    }
+
+    public double hiveDistance() {
+        return (hive.getVoltage() / hiveMaxVolt) * hiveMaxDistance;
     }
 
 

@@ -32,6 +32,7 @@ public class IntakeTest extends OpMode {
             intake.close();
 
         telemetry.addData("detected?", intake.detected());
+        telemetry.addData("hive distance", intake.hiveDistance());
         telemetry.update();
     }
 }

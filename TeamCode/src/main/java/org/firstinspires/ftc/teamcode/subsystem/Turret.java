@@ -11,7 +11,7 @@ public class Turret {
     private final Servo left, right;
     private double position = 0.535;
     private static final double ppr = (.78 - .5) / (Math.PI / 2.0);
-    public static final double center = 0.535;
+    public static final double center = 0.5;
     public static double goalDepth = 10;
     public static double offsetMultiplier = 1.0;
     public static double phiLimit = Math.toRadians(45);
@@ -54,7 +54,7 @@ public class Turret {
     public double returnFace(Pose targetPose, Pose robotPose) {
         double angleToTargetFromCenter = Math.atan2(targetPose.y() - robotPose.y(), targetPose.x() - robotPose.x());
         double robotAngleDiff = normalizeSigned(angleToTargetFromCenter - robotPose.heading());
-        robotAngleDiff = Utils.clamp(robotAngleDiff, -Math.PI, Math.PI);
+        robotAngleDiff = Utils.clamp(robotAngleDiff, -3*Math.PI/4, Math.PI);
         return robotAngleDiff;
     }
 

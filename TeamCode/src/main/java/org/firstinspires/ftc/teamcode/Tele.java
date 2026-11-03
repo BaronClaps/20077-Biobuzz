@@ -19,10 +19,12 @@ public class Tele extends OpMode {
     private MultipleTelemetry telemetryM;
     private Robot robot;
     public static Pose start = new Pose(59, 8, Math.toRadians(90));
+    public static Pose resetRed = new Pose(7, 6.5+24+2, Math.toRadians(0));
+    public static Pose resetBlue = new Pose(141.5-7, 141.5-(6.5+24+2), Math.toRadians(180));
     private IntakeMode intakeMode = IntakeMode.STOP;
     private Timer transferTimer = new Timer();
     private boolean previouslyDetected = false, shooter = true, flower = false, adjustable = true, opened = false;
-    public static double targetVelocity = 1540.0, hoodAngle = 0.25, angleOffset = 0.0;
+    public static double targetVelocity = 1440.0, hoodAngle = 0.3, angleOffset = 0.0;
 
     public Tele(Alliance alliance) {
         this.alliance = alliance;
@@ -81,7 +83,7 @@ public class Tele extends OpMode {
         switch (intakeMode) {
             case IN:
                 robot.intake.in();
-                if (robot.loops % 3 == 0) {
+                if (robot.loops % 10 == 0) {
                     boolean detected = robot.intake.detected();
                     if (detected && previouslyDetected) {
                         intakeMode = IntakeMode.PASSIVE;
@@ -135,7 +137,7 @@ public class Tele extends OpMode {
         }
 
         if (gamepad1.xWasPressed())
-            robot.pose(new Pose(70.75, 70.75, Math.toRadians(90)));
+            robot.pose(alliance == Alliance.RED ? resetRed : resetBlue);
 
         if (gamepad1.dpadLeftWasPressed())
             angleOffset += 3;

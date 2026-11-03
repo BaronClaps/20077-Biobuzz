@@ -9,7 +9,7 @@ import static com.pedropathing.utils.Angle.normalizeSigned;
 
 public class Turret {
     private final Servo left, right;
-    private double position = 0.535;
+    private double position = 0.5;
     private static final double ppr = (.78 - .5) / (Math.PI / 2.0);
     public static final double center = 0.5;
     public static double goalDepth = 10;
@@ -47,14 +47,14 @@ public class Turret {
     public void face(Pose targetPose, Pose robotPose) {
         double angleToTargetFromCenter = Math.atan2(targetPose.y() - robotPose.y(), targetPose.x() - robotPose.x());
         double robotAngleDiff = normalizeSigned(angleToTargetFromCenter - robotPose.heading());
-        robotAngleDiff = Utils.clamp(robotAngleDiff, -Math.PI, Math.PI);
+        robotAngleDiff = Utils.clamp(robotAngleDiff, -2.805, 2.805);
         angle(robotAngleDiff);
     }
 
     public double returnFace(Pose targetPose, Pose robotPose) {
         double angleToTargetFromCenter = Math.atan2(targetPose.y() - robotPose.y(), targetPose.x() - robotPose.x());
         double robotAngleDiff = normalizeSigned(angleToTargetFromCenter - robotPose.heading());
-        robotAngleDiff = Utils.clamp(robotAngleDiff, -3*Math.PI/4, Math.PI);
+        robotAngleDiff = Utils.clamp(robotAngleDiff, -2.805, 2.805);
         return robotAngleDiff;
     }
 

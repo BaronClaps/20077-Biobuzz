@@ -35,7 +35,7 @@ public class TwoTip extends CommandOpMode {
 
         schedule(
                 sequential(
-                        setup(1460, 0.35, 0),
+                        setup(1460, 0.35, -5),
                         waitMs(2000),
                         robot.shoot(),
                         robot.shoot(),
@@ -48,7 +48,7 @@ public class TwoTip extends CommandOpMode {
                                                         robot.intake.lowerFlower
                                                 )
                                 ),
-                        setup(1440, 0.35, -170),
+                        setup(1440, 0.35, -175),
                         waitMs(2000),
                         robot.shoot(),
                         robot.shoot(),
@@ -66,7 +66,7 @@ public class TwoTip extends CommandOpMode {
                                                 )
                                 ),
                         waitMs(2000),
-                        setup(1460, 0.35, 60),
+                        setup(1460, 0.35, 35),
                         paths.score()
                                         .with(
                                                 waitUntil(() -> robot.follower.completion() > 0.2)

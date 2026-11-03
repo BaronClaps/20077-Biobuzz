@@ -16,7 +16,6 @@ public class TwoTip extends CommandOpMode {
     final Alliance alliance;
     TwoTipPaths paths;
     Robot robot;
-    double velocity = 1560, hood = 0.25;
 
     public TwoTip(Alliance alliance) {
         this.alliance = alliance;
@@ -28,7 +27,7 @@ public class TwoTip extends CommandOpMode {
 
         robot.pose(paths.start());
         robot.shooter.disable();
-        robot.turret.angle(Math.toRadians(-120));
+        robot.turret.angle(Math.toRadians(0));
         robot.intake.close();
         robot.intake.stop();
         robot.intake.lowerAdjustable();
@@ -36,7 +35,7 @@ public class TwoTip extends CommandOpMode {
 
         schedule(
                 sequential(
-                        setup(1560, 0.25, -3),
+                        setup(1460, 0.35, 0),
                         waitMs(2000),
                         robot.shoot(),
                         robot.shoot(),
@@ -49,7 +48,7 @@ public class TwoTip extends CommandOpMode {
                                                         robot.intake.lowerFlower
                                                 )
                                 ),
-                        setup(1520, 0.25, -170),
+                        setup(1440, 0.35, -170),
                         waitMs(2000),
                         robot.shoot(),
                         robot.shoot(),
@@ -67,7 +66,7 @@ public class TwoTip extends CommandOpMode {
                                                 )
                                 ),
                         waitMs(2000),
-                        setup(1560, 0.25, 30),
+                        setup(1460, 0.35, 60),
                         paths.score()
                                         .with(
                                                 waitUntil(() -> robot.follower.completion() > 0.2)

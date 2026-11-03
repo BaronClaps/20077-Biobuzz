@@ -24,7 +24,7 @@ public class Tele extends OpMode {
     private IntakeMode intakeMode = IntakeMode.STOP;
     private Timer transferTimer = new Timer();
     private boolean previouslyDetected = false, shooter = true, flower = false, adjustable = true, opened = false;
-    public static double targetVelocity = 1440.0, hoodAngle = 0.3, angleOffset = 0.0;
+    public static double targetVelocity = 1420.0, hoodAngle = 0.35, angleOffset = 0.0;
 
     public Tele(Alliance alliance) {
         this.alliance = alliance;
@@ -140,10 +140,16 @@ public class Tele extends OpMode {
             robot.pose(alliance == Alliance.RED ? resetRed : resetBlue);
 
         if (gamepad1.dpadLeftWasPressed())
-            angleOffset += 3;
+            angleOffset += 7;
 
         if (gamepad1.dpadRightWasPressed())
-            angleOffset -= 3;
+            angleOffset -= 7;
+
+        if (gamepad1.yWasPressed())
+            targetVelocity += 20;
+
+        if (gamepad1.aWasPressed())
+            targetVelocity -= 20;
 
         robot.turret.angle(robot.turret.returnFace(AimTargets.target(alliance, robot.pose()), robot.pose()) + Math.toRadians(angleOffset));
         robot.update();

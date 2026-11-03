@@ -29,7 +29,7 @@ import java.util.List;
  *       + kP * (target - velocity)
  *       + kS
  */
-@Autonomous(name = "Shooter Autotuner Verified", group = "Tuning")
+@Autonomous(name = "Shooter Autotuner Verified", group = "Tests")
 public class ShooterAutoTuner extends LinearOpMode {
 
     // ================================================================

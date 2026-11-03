@@ -12,9 +12,7 @@ public class Turret {
     private double position = 0.5;
     private static final double ppr = (.78 - .5) / (Math.PI / 2.0);
     public static final double center = 0.5;
-    public static double goalDepth = 10;
-    public static double offsetMultiplier = 1.0;
-    public static double phiLimit = Math.toRadians(45);
+    public static double aimForward = 5;
 
     public Turret(HardwareMap hardwareMap) {
         left = hardwareMap.get(Servo.class, "turretLeft");
@@ -59,14 +57,11 @@ public class Turret {
     }
 
     public void offset(Pose targetPose, Pose robotPose) {
-        double phi = Utils.clamp(returnFace(robotPose, targetPose), -phiLimit, phiLimit);
-
-        double off = offsetMultiplier * (goalDepth / 2.0) * Math.tan(phi);
+        double h = targetPose.heading();
         Pose aim = new Pose(
-                targetPose.x() - off * Math.sin(targetPose.heading()),
-                targetPose.y() + off * Math.cos(targetPose.heading()),
-                targetPose.heading());
-
-        angle(returnFace(aim, robotPose));
+                targetPose.x() + aimForward * Math.cos(h),
+                targetPose.y() + aimForward * Math.sin(h),
+                h);
+        face(aim, robotPose);
     }
 }

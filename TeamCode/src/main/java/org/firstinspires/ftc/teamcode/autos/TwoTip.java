@@ -35,10 +35,11 @@ public class TwoTip extends CommandOpMode {
 
         schedule(
                 sequential(
-                        setup(1460, 0.35, -5),
-                        waitMs(2000),
+                        setup(1440, 0.31, -2),
+                        waitUntil(() -> robot.shooter.atTarget()),
+                        waitMs(500),
                         robot.shoot(),
-                        robot.shoot(),
+//                        robot.shoot(),
                         robot.intake(),
                         paths.flower1()
                                 .with(
@@ -48,10 +49,13 @@ public class TwoTip extends CommandOpMode {
                                                         robot.intake.lowerFlower
                                                 )
                                 ),
-                        setup(1440, 0.35, -175),
+                        setup(1440, 0.35, 40),
                         waitMs(2000),
+                        paths.flower1Shoot(),
+                        robot.intake.lowerAdjustable,
                         robot.shoot(),
                         robot.shoot(),
+                        robot.intake.raiseAdjustable,
                         robot.intake(),
                         paths.flower2()
                                 .with(
@@ -66,7 +70,7 @@ public class TwoTip extends CommandOpMode {
                                                 )
                                 ),
                         waitMs(2000),
-                        setup(1460, 0.35, 35),
+                        setup(1440, 0.35, 40),
                         paths.score()
                                         .with(
                                                 waitUntil(() -> robot.follower.completion() > 0.2)
@@ -74,6 +78,7 @@ public class TwoTip extends CommandOpMode {
                                                                 robot.intake.raiseAdjustable
                                                         )
                                         ),
+                        robot.intake.lowerAdjustable,
                         waitMs(500),
                         robot.shoot(),
                         robot.shoot(),

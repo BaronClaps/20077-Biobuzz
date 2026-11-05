@@ -24,7 +24,7 @@ public class Tele extends OpMode {
     private IntakeMode intakeMode = IntakeMode.STOP;
     private Timer transferTimer = new Timer();
     private boolean previouslyDetected = false, shooter = true, flower = false, adjustable = true, opened = false;
-    public static double targetVelocity = 1440.0, hoodAngle = 0.325, angleOffset = 0.0;
+    public static double targetVelocity = 1440.0, hoodAngle = 0.26, angleOffset = 0.0;
 
     public Tele(Alliance alliance) {
         this.alliance = alliance;
@@ -43,8 +43,10 @@ public class Tele extends OpMode {
         robot.intake.lowerAdjustable();
 //        robot.intake.in();
         robot.shooter.enable();
+        intakeMode = IntakeMode.STOP;
         robot.shooter.hood(hoodAngle);
         robot.intake.close();
+        robot.intake.stop();
         robot.update();
     }
 

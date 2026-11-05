@@ -49,7 +49,7 @@ public class TwoTip extends CommandOpMode {
                                                         robot.intake.lowerFlower
                                                 )
                                 ),
-                        setup(1440, 0.35, 40),
+                        setup(1460, 0.35, 35),
                         waitMs(2000),
                         paths.flower1Shoot(),
                         robot.intake.lowerAdjustable,
@@ -70,7 +70,7 @@ public class TwoTip extends CommandOpMode {
                                                 )
                                 ),
                         waitMs(2000),
-                        setup(1440, 0.35, 40),
+                        setup(1460, 0.35, 35),
                         paths.score()
                                         .with(
                                                 waitUntil(() -> robot.follower.completion() > 0.2)

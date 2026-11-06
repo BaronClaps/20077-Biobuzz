@@ -20,7 +20,7 @@ public class Intake {
     public static double inIntakePower = 1, inTransferPower = 0.5, outIntakePower = -1, outTransferPower = -0.5, shootIntakePower = 0.7, shootTransferPower = 0.5, passiveIntakePower = 0.75, passiveTransferPower = 0;
     public static double gateOpen = 0.77, gateClosed = 0.85;
     public static double adjustableDown = 0.52, adjustableUp = 0.25;
-    public static double flowerDown = 0.465, flowerUp = 0.67;
+    public static double flowerDown = 0.48, flowerUp = 0.67;
     public static double hiveMaxVolt = 3.3, hiveMaxDistance = 5000, hiveThreshold = 650;
 
     public Intake(HardwareMap hardwareMap) {

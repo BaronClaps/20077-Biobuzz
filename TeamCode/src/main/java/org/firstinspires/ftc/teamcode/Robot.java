@@ -21,6 +21,7 @@ import java.util.Locale;
 import java.util.Map;
 
 import static com.pedropathing.ivy.commands.Commands.waitMs;
+import static com.pedropathing.ivy.commands.Commands.waitUntil;
 import static com.pedropathing.ivy.groups.Groups.sequential;
 
 public class Robot {
@@ -72,6 +73,8 @@ public class Robot {
 
     public CommandBuilder shoot() {
         return sequential(
+                waitUntil(shooter::atTarget)
+                        .raceWith(waitMs(500)),
                 intake.open,
                 intake.transfer,
                 waitMs(2000),

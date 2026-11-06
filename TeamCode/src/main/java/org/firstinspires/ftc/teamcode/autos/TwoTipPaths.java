@@ -17,7 +17,7 @@ public class TwoTipPaths {
     public final PoseFactory poseFactory;
     public final Follower follower;
 
-    public final Pose start, flower1, flower1Control1, flower2, flower2Control1, flower2Control2, score, park;
+    public final Pose start, spike, flower1, flower1Control1, flower1Control2, flower2, flower2Control1, flower2Control2, score, park;
 
     public TwoTipPaths(Follower follower, Alliance alliance) {
         this.follower = follower;
@@ -28,10 +28,13 @@ public class TwoTipPaths {
             poseFactory = PoseFactory.degrees().mirrorX(70.75).mirrorY(70.75);
         }
 
-        start = poseFactory.of(88, 134.5, 270);
+        start = poseFactory.of(88.75+23.622, 134.5, 0);
+
+        spike = poseFactory.of(131.5, 134.5, 0);
 
         flower1 = poseFactory.of(92, 12.5, 270);
-        flower1Control1 = poseFactory.of(72, 38, 0);
+        flower1Control1 = poseFactory.of(60, 100, 0);
+        flower1Control2 = poseFactory.of(72, 38, 0);
 
         flower2 = poseFactory.of(127.5, 94.33, 0);
         flower2Control1 = poseFactory.of(115, 40, 0);
@@ -46,9 +49,22 @@ public class TwoTipPaths {
         return start;
     }
 
+    public CommandBuilder spike() {
+        return follow(follower,
+                Paths.line(start, spike)
+                        .linear(start, spike)
+                        .with(Constants.foresightConfig.maxPathSpeed.at(0.5)));
+    }
+
+    public CommandBuilder spikeShoot() {
+        return follow(follower,
+                Paths.line(spike, start)
+                        .linear(spike, start));
+    }
+
     public CommandBuilder flower1() {
         return follow(follower,
-                Paths.curve(start, flower1Control1, flower1)
+                Paths.curve(start, flower1Control1, flower1Control2, flower1)
                         .constant(flower1).with(Constants.foresightConfig.brakeAtEnd.at(false)));
     }
 

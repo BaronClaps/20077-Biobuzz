@@ -11,7 +11,7 @@ public class Turret {
     private final Servo left, right;
     private double position = 0.5;
     private static final double ppr = (.78 - .5) / (Math.PI / 2.0);
-    public static final double center = 0.5;
+    public static final double center = 0.52;
     public static double aimForward = 5;
 
     public Turret(HardwareMap hardwareMap) {

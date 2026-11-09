@@ -12,7 +12,7 @@ import org.firstinspires.ftc.teamcode.utils.Alliance;
 public class Tele extends OpMode {
 
     enum IntakeMode {
-        IN, OUT, STOP, PASSIVE, TRANSFER
+        IN, OUT, STOP, SEMI, PASSIVE, TRANSFER
     }
 
     private final Alliance alliance;
@@ -23,8 +23,8 @@ public class Tele extends OpMode {
     public static Pose resetBlue = new Pose(141.5-7, 141.5-(6.5+24+2), Math.toRadians(180));
     private IntakeMode intakeMode = IntakeMode.STOP;
     private Timer transferTimer = new Timer();
-    private boolean previouslyDetected = false, shooter = true, flower = false, adjustable = true, opened = false;
-    public static double targetVelocity = 1440.0, hoodAngle = 0.26, angleOffset = 0.0;
+    private boolean previouslyDetected = false, previouslySemi = false, shooter = false, flower = false, adjustable = true, opened = true, rejectSequence = false;
+    public static double targetVelocity = 1420.0, hoodAngle = 0.265, angleOffset = 0.0;
 
     public Tele(Alliance alliance) {
         this.alliance = alliance;
@@ -36,6 +36,12 @@ public class Tele extends OpMode {
         robot.pose(start);
 
         telemetryM = new MultipleTelemetry(telemetry, FtcDashboard.getInstance().getTelemetry());
+    }
+
+    @Override
+    public void init_loop() {
+        if (gamepad1.xWasPressed())
+            robot.follower.localizer.reset();
     }
 
     public void start() {
@@ -61,22 +67,42 @@ public class Tele extends OpMode {
             opened = false;
         }
 
-        if (transferTimer.seconds() > 2.0 && intakeMode == IntakeMode.TRANSFER) {
+        if (transferTimer.seconds() > 1.2 && intakeMode == IntakeMode.TRANSFER) {
             intakeMode = IntakeMode.IN;
             robot.intake.close();
         }
 
+        if (transferTimer.seconds() > 1 && intakeMode == IntakeMode.OUT && rejectSequence) {
+            intakeMode = IntakeMode.TRANSFER;
+            rejectSequence = false;
+        }
+
+        if (transferTimer.seconds() > 0.85 && intakeMode == IntakeMode.STOP && rejectSequence) {
+            intakeMode = IntakeMode.OUT;
+        }
+
+        if (transferTimer.seconds() > 0.7 && intakeMode == IntakeMode.TRANSFER && rejectSequence) {
+            intakeMode = IntakeMode.STOP;
+        }
+
         if (transferTimer.seconds() > 0.1 && !opened && intakeMode == IntakeMode.STOP) {
+            rejectSequence = true;
             intakeMode = IntakeMode.TRANSFER;
             opened = true;
         }
+
+        if (gamepad1.dpadUpWasPressed())
+            hoodAngle -= 0.005;
+
+        if (gamepad1.backWasPressed())
+            robot.follower.localizer.reset();
 
         boolean inPressed = gamepad1.leftTriggerWasPressed();
         boolean outPressed = gamepad1.dpadDownWasPressed();
 
         if (intakeMode != IntakeMode.TRANSFER) {
             if (inPressed) {
-                intakeMode = (intakeMode == IntakeMode.IN) ? IntakeMode.STOP : IntakeMode.IN;
+                intakeMode = ((intakeMode == IntakeMode.IN || intakeMode == IntakeMode.SEMI || intakeMode == IntakeMode.PASSIVE)) ? IntakeMode.STOP : IntakeMode.IN;
             } else if (outPressed) {
                 intakeMode = (intakeMode == IntakeMode.OUT) ? IntakeMode.STOP : IntakeMode.OUT;
             }
@@ -85,26 +111,29 @@ public class Tele extends OpMode {
         switch (intakeMode) {
             case IN:
                 robot.intake.in();
-                if (robot.loops % 10 == 0) {
-                    boolean detected = robot.intake.detected();
-                    if (detected && previouslyDetected) {
-                        intakeMode = IntakeMode.PASSIVE;
-                        break;
-                    }
-                    previouslyDetected = detected;
-                }
+                robot.light.in();
+                check();
                 break;
             case OUT:
                 robot.intake.out();
+                robot.light.out();
                 break;
             case STOP:
                 robot.intake.stop();
+                robot.light.stop();
                 break;
             case PASSIVE:
                 robot.intake.passive();
+                robot.light.ready();
                 break;
             case TRANSFER:
                 robot.intake.transfer();
+                robot.light.shoot();
+                break;
+            case SEMI:
+                robot.intake.semi();
+                robot.light.in();
+                check();
                 break;
         }
 
@@ -138,14 +167,16 @@ public class Tele extends OpMode {
             robot.shooter.disable();
         }
 
-        if (gamepad1.xWasPressed())
+        if (gamepad1.xWasPressed()) {
             robot.pose(alliance == Alliance.RED ? resetRed : resetBlue);
+            angleOffset = 0;
+        }
 
         if (gamepad1.dpadLeftWasPressed())
-            angleOffset += 7;
+            angleOffset += 5;
 
         if (gamepad1.dpadRightWasPressed())
-            angleOffset -= 7;
+            angleOffset -= 5;
 
         if (gamepad1.yWasPressed())
             targetVelocity += 20;
@@ -164,7 +195,36 @@ public class Tele extends OpMode {
         telemetryM.addData("Shooter Velocity", robot.shooter.velocity());
         telemetryM.addData("Distance from Target", AimTargets.target(alliance, robot.pose()).distance(robot.pose()));
         telemetryM.addData("X & Y from Target", AimTargets.target(alliance, robot.pose()).minus(robot.pose()));
-        telemetryM.addLine(robot.currentBreakdown());
+//        telemetryM.addLine(robot.currentBreakdown());
         telemetryM.update();
+    }
+
+    public void stop() {
+        robot.light.off();
+        super.stop();
+    }
+
+    public void check() {
+        if (robot.loops % 20 == 0) {
+            if (intakeMode == IntakeMode.PASSIVE)
+                return;
+
+            boolean detected = robot.intake.detected();
+            if (detected && previouslyDetected) {
+                intakeMode = IntakeMode.PASSIVE;
+                return;
+            }
+            previouslyDetected = detected;
+
+            if (intakeMode == IntakeMode.SEMI)
+                return;
+
+            boolean semi = robot.intake.transferStalling();
+            if (semi && previouslySemi) {
+                intakeMode = IntakeMode.SEMI;
+                return;
+            }
+            previouslySemi = semi;
+        }
     }
 }

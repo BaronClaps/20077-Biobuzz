@@ -21,7 +21,7 @@ public class Intake {
     public static double gateOpen = 0.77, gateClosed = 0.85;
     public static double adjustableDown = 0.52, adjustableUp = 0.25;
     public static double flowerDown = 0.48, flowerUp = 0.67;
-    public static double hiveMaxVolt = 3.3, hiveMaxDistance = 5000, hiveThreshold = 650;
+    public static double hiveMaxVolt = 3.3, hiveMaxDistance = 5000, hiveThreshold = 650, transferStallThreshold = 3;
 
     public Intake(HardwareMap hardwareMap) {
         i = new CachedMotor(hardwareMap.get(DcMotorEx.class, "intake"), 0.01);
@@ -59,6 +59,11 @@ public class Intake {
     public void passive() {
         i.setPower(passiveIntakePower);
         t.setPower(passiveTransferPower);
+    }
+
+    public void semi() {
+        i.setPower(inIntakePower);
+        t.setPower(0);
     }
 
     public void open() {
@@ -117,6 +122,10 @@ public class Intake {
 
     public double hiveDistance() {
         return (hive.getVoltage() / hiveMaxVolt) * hiveMaxDistance;
+    }
+
+    public boolean transferStalling() {
+        return t.raw().getCurrent(CurrentUnit.AMPS) > transferStallThreshold;
     }
 
 

@@ -30,6 +30,7 @@ public class Robot {
     public final Shooter shooter;
     public final Turret turret;
     public final Follower follower;
+    public final Light light;
     private final Map<String, DcMotorEx> driveMotors = new LinkedHashMap<>();
     private final Timer loop = new Timer();
     public double loops = 0, lastLoop = 0, loopTime = 0;
@@ -41,6 +42,7 @@ public class Robot {
         shooter = new Shooter(hardwareMap);
         turret = new Turret(hardwareMap);
         follower = Constants.create(hardwareMap);
+        light = new Light(hardwareMap);
 
         MecanumConfig drive = Constants.drivetrainConfig;
         for (String name : new String[]{drive.frontLeftName.get(), drive.frontRightName.get(), drive.backLeftName.get(), drive.backRightName.get()}) {
@@ -77,7 +79,7 @@ public class Robot {
                         .raceWith(waitMs(500)),
                 intake.open,
                 intake.transfer,
-                waitMs(2000),
+                waitMs(1000),
                 intake.in,
                 intake.close
         );

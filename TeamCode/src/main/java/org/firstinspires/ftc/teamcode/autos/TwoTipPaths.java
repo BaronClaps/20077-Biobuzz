@@ -33,10 +33,10 @@ public class TwoTipPaths {
         spike = poseFactory.of(131.5, 134.5, 0);
 
         flower1 = poseFactory.of(92, 12.5, 270);
-        flower1Control1 = poseFactory.of(60, 100, 0);
+        flower1Control1 = poseFactory.of(65, 100, 0);
         flower1Control2 = poseFactory.of(72, 38, 0);
 
-        flower2 = poseFactory.of(127.5, 94.33, 0);
+        flower2 = poseFactory.of(129.5, 94.33, 0);
         flower2Control1 = poseFactory.of(115, 40, 0);
         flower2Control2 = poseFactory.of(112, 96, 0);
 

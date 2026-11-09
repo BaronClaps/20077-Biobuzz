@@ -11,7 +11,7 @@ public class Turret {
     private final Servo left, right;
     private double position = 0.5;
     private static final double ppr = (.78 - .5) / (Math.PI / 2.0);
-    public static final double center = 0.52;
+    public static final double center = 0.5;
     public static double aimForward = 5;
 
     public Turret(HardwareMap hardwareMap) {
@@ -43,25 +43,13 @@ public class Turret {
     }
 
     public void face(Pose targetPose, Pose robotPose) {
-        double angleToTargetFromCenter = Math.atan2(targetPose.y() - robotPose.y(), targetPose.x() - robotPose.x());
-        double robotAngleDiff = normalizeSigned(angleToTargetFromCenter - robotPose.heading());
-        robotAngleDiff = Utils.clamp(robotAngleDiff, -2.805, 2.805);
-        angle(robotAngleDiff);
+        angle(returnFace(targetPose, robotPose));
     }
 
     public double returnFace(Pose targetPose, Pose robotPose) {
         double angleToTargetFromCenter = Math.atan2(targetPose.y() - robotPose.y(), targetPose.x() - robotPose.x());
         double robotAngleDiff = normalizeSigned(angleToTargetFromCenter - robotPose.heading());
-        robotAngleDiff = Utils.clamp(robotAngleDiff, -2.805, 2.805);
+        robotAngleDiff = Utils.clamp(robotAngleDiff, -Math.PI / 2,  Math.PI / 2);
         return robotAngleDiff;
-    }
-
-    public void offset(Pose targetPose, Pose robotPose) {
-        double h = targetPose.heading();
-        Pose aim = new Pose(
-                targetPose.x() + aimForward * Math.cos(h),
-                targetPose.y() + aimForward * Math.sin(h),
-                h);
-        face(aim, robotPose);
     }
 }

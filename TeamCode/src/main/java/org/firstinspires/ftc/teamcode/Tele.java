@@ -215,25 +215,27 @@ public class Tele extends OpMode {
     }
 
     public void check() {
-        if (intakeMode == IntakeMode.PASSIVE)
-            return;
+        if (robot.loops % 20 == 0) {
+            if (intakeMode == IntakeMode.PASSIVE)
+                return;
 
-        boolean detected = robot.intake.detected();
-        if (detected && previouslyDetected) {
-            intakeMode = IntakeMode.PASSIVE;
-            return;
+            boolean detected = robot.intake.detected();
+            if (detected && previouslyDetected) {
+                intakeMode = IntakeMode.PASSIVE;
+                return;
+            }
+            previouslyDetected = detected;
+
+            if (intakeMode == IntakeMode.SEMI)
+                return;
+
+            boolean semi = robot.intake.transferStalling();
+            if (semi && previouslySemi) {
+                intakeMode = IntakeMode.SEMI;
+                return;
+            }
+            previouslySemi = semi;
         }
-        previouslyDetected = detected;
-
-        if (intakeMode == IntakeMode.SEMI)
-            return;
-
-        boolean semi = robot.intake.transferStalling();
-        if (semi && previouslySemi) {
-            intakeMode = IntakeMode.SEMI;
-            return;
-        }
-        previouslySemi = semi;
     }
 
     public void stall() {

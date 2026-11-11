@@ -24,7 +24,7 @@ public class Tele extends OpMode {
     private IntakeMode intakeMode = IntakeMode.STOP;
     private Timer transferTimer = new Timer();
     private boolean previouslyDetected = false, previouslySemi = false, previouslyIntakeStall = false, wasRaised = false, shooter = false, flower = false, adjustable = true, opened = true, rejectSequence = false;
-    public static double targetVelocity = 1440.0, hoodAngle = 0.35, angleOffset = 0.0;
+    public static double targetVelocity = 1420.0, hoodAngle = 0.275, angleOffset = 0.0;
 
     public Tele(Alliance alliance) {
         this.alliance = alliance;
@@ -67,21 +67,21 @@ public class Tele extends OpMode {
             opened = false;
         }
 
-        if (transferTimer.seconds() > 1.2 && intakeMode == IntakeMode.TRANSFER) {
+        if (transferTimer.seconds() > 1.5 && intakeMode == IntakeMode.TRANSFER) {
             intakeMode = IntakeMode.IN;
             robot.intake.close();
         }
 
-        if (transferTimer.seconds() > 1 && intakeMode == IntakeMode.OUT && rejectSequence) {
+        if (transferTimer.seconds() > 1.2 && intakeMode == IntakeMode.OUT && rejectSequence) {
             intakeMode = IntakeMode.TRANSFER;
             rejectSequence = false;
         }
 
-        if (transferTimer.seconds() > 0.85 && intakeMode == IntakeMode.STOP && rejectSequence) {
+        if (transferTimer.seconds() > 1.05 && intakeMode == IntakeMode.STOP && rejectSequence) {
             intakeMode = IntakeMode.OUT;
         }
 
-        if (transferTimer.seconds() > 0.7 && intakeMode == IntakeMode.TRANSFER && rejectSequence) {
+        if (transferTimer.seconds() > 0.85 && intakeMode == IntakeMode.TRANSFER && rejectSequence) {
             intakeMode = IntakeMode.STOP;
         }
 

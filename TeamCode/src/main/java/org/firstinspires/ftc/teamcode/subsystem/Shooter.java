@@ -16,15 +16,15 @@ import static com.pedropathing.ivy.commands.Commands.instant;
 
 @Config
 public class Shooter {
-    private final CachedMotor top, bottom;
+    private final CachedMotor bottom;
     private final Servo hood;
     private double target = 0, current = 0, hoodPosition;
-    public static double kS = 0.106135, kV = 0.00038213, kP = 0.017, useRaw = 40, targetThreshold = 40;
+    public static double kS = 0.106135, kV = 0.00038213, kP = 0.025, useRaw = 60, targetThreshold = 40;
     public static double hoodMin = 0.2, hoodMax = 0.5;
     public boolean activated = false;
 
     public Shooter(HardwareMap hardwareMap) {
-        top = new CachedMotor(hardwareMap.get(DcMotorEx.class, "shooterTop"), 0.01);
+//        top = new CachedMotor(hardwareMap.get(DcMotorEx.class, "shooterTop"), 0.01);
         bottom = new CachedMotor(hardwareMap.get(DcMotorEx.class, "shooterBottom"), 0.01);
         bottom.setDirection(DcMotorSimple.Direction.REVERSE);
         hood = hardwareMap.get(Servo.class, "hood");
@@ -44,7 +44,7 @@ public class Shooter {
     }
 
     public void power(double power) {
-        top.setPower(power);
+        // top.setPower(power);
         bottom.setPower(power);
     }
 
@@ -92,11 +92,11 @@ public class Shooter {
     }
 
     public double current() {
-        return top.raw().getCurrent(CurrentUnit.AMPS) + bottom.raw().getCurrent(CurrentUnit.AMPS);
+        return bottom.raw().getCurrent(CurrentUnit.AMPS);
     }
 
     public String currentBreakdown() {
-        return String.format(Locale.US, "shooterTop: %.2fA\nshooterBottom: %.2fA", top.raw().getCurrent(CurrentUnit.AMPS), bottom.raw().getCurrent(CurrentUnit.AMPS));
+        return String.format(Locale.US, "shooterBottom: %.2fA", bottom.raw().getCurrent(CurrentUnit.AMPS));
     }
 
     public CommandBuilder enable =instant(this::enable);

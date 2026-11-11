@@ -12,9 +12,9 @@ public class AimTargets {
 
     public static Pose target(Alliance a, Pose currentPose) {
         Pose blueScoring = center.plus(new Pose(xOffset-3, yOffset));
-        Pose redScoring = center.plus(new Pose(-xOffset, yOffset));
+        Pose redScoring = center.plus(new Pose(-xOffset+1.5, yOffset));
         Pose blueAudience = center.plus(new Pose(xOffset, -yOffset));
-        Pose redAudience = center.plus(new Pose(-xOffset, -yOffset));
+        Pose redAudience = center.plus(new Pose(-xOffset-2, -yOffset));
 
         if (a == Alliance.BLUE) {
             if (currentPose.y() > 70.75) {

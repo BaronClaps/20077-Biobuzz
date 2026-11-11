@@ -19,7 +19,7 @@ public class Shooter {
     private final CachedMotor bottom;
     private final Servo hood;
     private double target = 0, current = 0, hoodPosition;
-    public static double kS = 0.106135, kV = 0.00038213, kP = 0.025, useRaw = 60, targetThreshold = 40;
+    public static double kS = 0.106135, kV = 0.00038213, kP = 0.025, useRaw = 60, targetThreshold = 20;
     public static double hoodMin = 0.2, hoodMax = 0.5;
     public boolean activated = false;
 
@@ -61,7 +61,7 @@ public class Shooter {
     }
 
     public boolean atTarget() {
-        return Math.abs(current - target) < targetThreshold;
+        return Math.abs(current - target) <= targetThreshold;
     }
 
     public void activated(boolean activated) {

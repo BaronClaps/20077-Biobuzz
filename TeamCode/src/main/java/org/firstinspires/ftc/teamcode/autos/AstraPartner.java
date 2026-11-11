@@ -30,7 +30,7 @@ public class AstraPartner extends CommandOpMode {
 
         robot.pose(paths.start());
         robot.shooter.disable();
-        robot.turret.angle(Math.toRadians(25));
+        robot.turret.angle(Math.toRadians(31.5));
         robot.intake.close();
         robot.intake.stop();
         robot.intake.lowerAdjustable();
@@ -42,9 +42,10 @@ public class AstraPartner extends CommandOpMode {
                         robot.shooter.disable,
                         waitMs(5000),
                         robot.shooter.enable,
-                        setup(1440, 0.275, 25),
+                        setup(1400, 0.275, 31.5),
                         waitUntil(() -> robot.shooter.atTarget()),
                         waitMs(500),
+//                        waitMs(500),
                         robot.shoot(),
                         robot.shoot(),
                         paths.park()
@@ -79,7 +80,7 @@ public class AstraPartner extends CommandOpMode {
     }
 
     public void stop() {
-        Tele.start = robot.pose();
+        Tele.start = paths.park;
         super.stop();
     }
 }

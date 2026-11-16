@@ -9,14 +9,14 @@ import org.firstinspires.ftc.teamcode.subsystem.Turret;
 @TeleOp(name = "Turret Test", group = "Tests")
 public class TurretTest extends OpMode {
     Turret turret;
-    public static double angleDegrees = 0, position = Turret.center;
+    public static double angleDegrees = 0, pwm = Turret.center;
     public static boolean isAngle = false;
 
     @Override
     public void init() {
         turret = new Turret(hardwareMap);
 
-        turret.position(Turret.center);
+        turret.pwm(Turret.center);
     }
 
     @Override
@@ -28,22 +28,22 @@ public class TurretTest extends OpMode {
             angleDegrees -= 5;
 
         if (gamepad1.dpadLeftWasPressed())
-            position -= 0.05;
+            pwm -= 50;
 
         if (gamepad1.dpadRightWasPressed())
-            position += 0.05;
+            pwm += 50;
 
         if (isAngle) {
             turret.angle(Math.toRadians(angleDegrees));
         } else {
-            turret.position(position);
+            turret.pwm(pwm);
         }
 
         telemetry.addData("Mode", isAngle ? "Angle" : "Position");
         telemetry.addData("Angle (degrees)", angleDegrees);
-        telemetry.addData("Position", position);
+        telemetry.addData("Position", pwm);
         telemetry.addData("Current Angle (degrees)", Math.toDegrees(turret.angle()));
-        telemetry.addData("Current Position", turret.position());
+        telemetry.addData("Current Position", turret.pwm());
         telemetry.update();
     }
 }

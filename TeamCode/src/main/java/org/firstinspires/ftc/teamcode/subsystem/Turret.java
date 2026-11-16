@@ -3,42 +3,49 @@ package org.firstinspires.ftc.teamcode.subsystem;
 import com.pedropathing.math.Pose;
 import com.pedropathing.utils.Utils;
 import com.qualcomm.robotcore.hardware.HardwareMap;
-import com.qualcomm.robotcore.hardware.Servo;
+import com.qualcomm.robotcore.hardware.PwmControl;
+import com.qualcomm.robotcore.hardware.ServoImplEx;
 
 import static com.pedropathing.utils.Angle.normalizeSigned;
 
 public class Turret {
-    private final Servo left, right;
-    private double position = .8125;
-    private static final double ppr = (0.8125 - .535) / (Math.PI / 2.0);
-    public static final double center = .8125;
+    private final ServoImplEx left, right;
+    private double pwm = 2000;
+    private static final double ppr = (2000-1500) / (Math.PI / 2.0);
+    public static final double center = 2000;
 
     public Turret(HardwareMap hardwareMap) {
-        left = hardwareMap.get(Servo.class, "turretLeft");
-        right = hardwareMap.get(Servo.class, "turretRight");
+        left = hardwareMap.get(ServoImplEx.class, "turretLeft");
+        right = hardwareMap.get(ServoImplEx.class, "turretRight");
+
+        left.setPwmRange(new PwmControl.PwmRange(500,2500));
+        right.setPwmRange(new PwmControl.PwmRange(500,2500));
+
+        left.setPwmEnable();
+        right.setPwmEnable();
     }
 
-    public void position(double position) {
-        left.setPosition(position+0.01);
-        right.setPosition(position-0.01);
-        this.position = position;
+    public void pwm(double pwm) {
+        left.setPulseWidth(pwm);
+        right.setPulseWidth(pwm);
+        this.pwm = pwm;
     }
 
-    public double position() {
-        return position;
+    public double pwm() {
+        return pwm;
     }
 
     public void manual(double increment) {
-        position(position() + increment);
+        pwm(pwm() + increment);
     }
 
     public double angle() {
-        return normalizeSigned((position() - center) / ppr);
+        return normalizeSigned((pwm() - center) / ppr);
     }
 
     public void angle(double radians) {
         radians = normalizeSigned(radians);
-        position(center + ppr * radians);
+        pwm(center + ppr * radians);
     }
 
     public void face(Pose targetPose, Pose robotPose) {

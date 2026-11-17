@@ -10,16 +10,16 @@ import static com.pedropathing.utils.Angle.normalizeSigned;
 
 public class Turret {
     private final ServoImplEx left, right;
-    private double pwm = 2000;
-    private static final double ppr = (2000-1500) / (Math.PI / 2.0);
-    public static final double center = 2000;
+    private double pwm = 1500;
+    private static final double ppr = (2475-2000) / (Math.PI/2);
+    public static final double center = 1500;
 
     public Turret(HardwareMap hardwareMap) {
         left = hardwareMap.get(ServoImplEx.class, "turretLeft");
         right = hardwareMap.get(ServoImplEx.class, "turretRight");
 
-        left.setPwmRange(new PwmControl.PwmRange(500,2500));
-        right.setPwmRange(new PwmControl.PwmRange(500,2500));
+        left.setPwmRange(new PwmControl.PwmRange(499,2501));
+        right.setPwmRange(new PwmControl.PwmRange(499,2501));
 
         left.setPwmEnable();
         right.setPwmEnable();
@@ -54,8 +54,8 @@ public class Turret {
 
     public double returnFace(Pose targetPose, Pose robotPose) {
         double angleToTargetFromCenter = Math.atan2(targetPose.y() - robotPose.y(), targetPose.x() - robotPose.x());
-        double robotAngleDiff = normalizeSigned(angleToTargetFromCenter - robotPose.heading() + Math.PI/2)-Math.PI/2; // -3PI/2 to PI/2
-        robotAngleDiff = Utils.clamp(robotAngleDiff, -3*Math.PI / 2,  Math.PI / 2);
+        double robotAngleDiff = normalizeSigned(angleToTargetFromCenter - robotPose.heading());
+        robotAngleDiff = Utils.clamp(robotAngleDiff, -Math.PI,  Math.PI);
         return robotAngleDiff;
     }
 }

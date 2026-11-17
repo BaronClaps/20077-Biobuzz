@@ -31,7 +31,7 @@ public class Shooter {
     }
 
     public void update() {
-        current = -bottom.raw().getVelocity();
+        current = bottom.raw().getVelocity();
 
         if (activated) {
             if (Math.abs(target - velocity()) > useRaw)

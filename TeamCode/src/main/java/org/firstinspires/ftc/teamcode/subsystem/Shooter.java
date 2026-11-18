@@ -19,7 +19,7 @@ public class Shooter {
     private final CachedMotor bottom;
     private final Servo hood;
     private double target = 0, current = 0, hoodPosition;
-    public static double kS = 0.106135, kV = 0.00035, kP = 0.0039, useRaw = 40, targetThreshold = 20;
+    public static double kS = 0.106135, kV = 0.00035, kP = 0.003, useRaw = 80, targetThreshold = 40;
     public static double hoodMin = 0.2, hoodMax = 0.5;
     public boolean activated = false;
 

@@ -205,7 +205,7 @@ public class Tele extends OpMode {
         telemetryM.addData("Distance from Target", AimTargets.target(alliance, robot.pose()).distance(robot.pose()));
         telemetryM.addData("X & Y from Target", AimTargets.target(alliance, robot.pose()).minus(robot.pose()));
         telemetryM.addData("offset", angleOffset);
-        telemetryM.addLine(robot.currentBreakdown());
+//        telemetryM.addLine(robot.currentBreakdown());
         telemetryM.update();
     }
 

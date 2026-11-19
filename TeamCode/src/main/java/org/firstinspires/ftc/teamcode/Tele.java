@@ -24,7 +24,7 @@ public class Tele extends OpMode {
     private IntakeMode intakeMode = IntakeMode.STOP;
     private Timer transferTimer = new Timer();
     private boolean previouslyDetected = false, previouslySemi = false, previouslyIntakeStall = false, wasRaised = false, shooter = false, flower = false, adjustable = true, opened = true, rejectSequence = false;
-    public static double targetVelocity = 2320.0, hoodAngle = 0.275, angleOffset = 0.0;
+    public static double targetVelocity = 2180.0, hoodAngle = 0.275, angleOffset = 0.0;
 
     public Tele(Alliance alliance) {
         this.alliance = alliance;

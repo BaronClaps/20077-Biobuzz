@@ -18,8 +18,8 @@ import static com.pedropathing.ivy.commands.Commands.instant;
 public class Shooter {
     private final CachedMotor bottom;
     private final Servo hood;
-    private double target = 0, current = 0, hoodPosition;
-    public static double kS = 0.106135, kV = 0.00035, kP = 0.003, useRaw = 80, targetThreshold = 40;
+    private double target = 0, current = 0, hoodPosition, power;
+    public static double kS = 0.05, kV = 0.0003, kP = 0.003, useRaw = 200, targetThreshold = 40;
     public static double hoodMin = 0.2, hoodMax = 0.5;
     public boolean activated = false;
 
@@ -46,6 +46,11 @@ public class Shooter {
     public void power(double power) {
         // top.setPower(power);
         bottom.setPower(power);
+        this.power = power;
+    }
+
+    public double power() {
+        return power;
     }
 
     public void target(double target) {

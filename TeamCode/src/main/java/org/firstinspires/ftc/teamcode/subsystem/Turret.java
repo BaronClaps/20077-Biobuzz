@@ -11,15 +11,15 @@ import static com.pedropathing.utils.Angle.normalizeSigned;
 public class Turret {
     private final ServoImplEx left, right;
     private double pwm = 1500;
-    private static final double ppr = (2475-2000) / (Math.PI/2);
+    private static final double ppr = (-1500+1000) / (Math.PI/2);
     public static final double center = 1500;
 
     public Turret(HardwareMap hardwareMap) {
         left = hardwareMap.get(ServoImplEx.class, "turretLeft");
         right = hardwareMap.get(ServoImplEx.class, "turretRight");
 
-        left.setPwmRange(new PwmControl.PwmRange(499,2501));
-        right.setPwmRange(new PwmControl.PwmRange(499,2501));
+        left.setPwmRange(new PwmControl.PwmRange(500,2500));
+        right.setPwmRange(new PwmControl.PwmRange(500,2500));
 
         left.setPwmEnable();
         right.setPwmEnable();

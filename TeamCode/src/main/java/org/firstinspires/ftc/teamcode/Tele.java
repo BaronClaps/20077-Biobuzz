@@ -201,6 +201,7 @@ public class Tele extends OpMode {
         telemetryM.addData("Intake Mode", intakeMode);
         telemetryM.addData("Shooter Velocity", robot.shooter.velocity());
         telemetryM.addData("Target Velocity", robot.shooter.target());
+        telemetryM.addData("Shooter Power", robot.shooter.power());
         telemetryM.addData("Shooter Hood", robot.shooter.hood());
         telemetryM.addData("Distance from Target", AimTargets.target(alliance, robot.pose()).distance(robot.pose()));
         telemetryM.addData("X & Y from Target", AimTargets.target(alliance, robot.pose()).minus(robot.pose()));

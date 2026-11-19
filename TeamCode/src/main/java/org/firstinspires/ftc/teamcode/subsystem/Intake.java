@@ -17,7 +17,7 @@ public class Intake {
     public final Servo gate, adjustableLeft, adjustableRight, flowerLeft, flowerRight;
     public final DigitalChannel beam;
     public final AnalogInput hive;
-    public static double inIntakePower = 0.85, inTransferPower = 0.5, outIntakePower = -.5, outTransferPower = -0.5, shootIntakePower = 0.6, shootTransferPower = 0.6, passiveIntakePower = 0.7, passiveTransferPower = 0;
+    public static double inIntakePower = 0.85, inTransferPower = 0.5, outIntakePower = -.5, outTransferPower = -0.5, shootIntakePower = 0.7, shootTransferPower = 0.6, passiveIntakePower = 0.7, passiveTransferPower = 0;
     public static double gateOpen = 0.77, gateClosed = 0.85;
     public static double adjustableDown = 0.52, adjustableUp = 0.25;
     public static double flowerDown = 0.48, flowerUp = 0.67;
@@ -27,6 +27,8 @@ public class Intake {
         i = new CachedMotor(hardwareMap.get(DcMotorEx.class, "intake"), 0.01);
         t = new CachedMotor(hardwareMap.get(DcMotorEx.class, "transfer"), 0.01);
         i.setDirection(DcMotorSimple.Direction.REVERSE);
+        i.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+        t.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         gate = hardwareMap.get(Servo.class, "gate");
         flowerLeft = hardwareMap.get(Servo.class, "flowerLeft");
         flowerRight = hardwareMap.get(Servo.class, "flowerRight");

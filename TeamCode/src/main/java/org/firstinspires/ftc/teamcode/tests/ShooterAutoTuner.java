@@ -25,16 +25,16 @@ import java.util.Locale;
  *
  * <p>Goal: recover quickly when a launched ball drags the flywheel down, while holding the
  * target as tightly as possible. Every closed-loop test runs through the REAL control law in
- * Shooter.update(), including the useRaw bang-bang zone.
+ * Shooter.update(): power = clamp(kV * target + kP * (target - velocity) + kS, 0, 1).
  *
  * <h3>How the real control law is driven</h3>
  * Shooter.update() is the only thing that writes motor power, and it overwrites whatever
  * power(x) was set earlier. So instead of fighting it, this tuner sets the public static gains
  * and lets update() do the work:
  * <ul>
- * <li>Open-loop power p: kP = 0, kS = 0, useRaw = 1e9, target = 1, kV = p. update() then
- * outputs exactly max(0, p * 1) = p.</li>
- * <li>Closed loop: set the real kV/kS/kP/useRaw, target(t), enable().</li>
+ * <li>Open-loop power p: kP = 0, kS = 0, target = 1, kV = p. update() then outputs exactly
+ * clamp(p * 1) = p.</li>
+ * <li>Closed loop: set the real kV/kS/kP, target(t), enable().</li>
  * </ul>
  *
  * <h3>Phases</h3>
@@ -42,22 +42,30 @@ import java.util.Locale;
  * <li>Ramp: settle at each open-loop power, fit power = kV * v + kS, report R^2 and tau.</li>
  * <li>Feedforward check at the test target: open-loop steady-state error, sensor noise, and an
  * optional one-step kV trim.</li>
- * <li>kP search (log grid, then refine) and useRaw search, using simulated ball drops: the
- * controller holds target, we cut power until velocity falls by DIP_TICKS, then re-enable
- * and measure recovery.</li>
- * <li>Re-test of the top candidates, then one drop at each CHECK_TARGETS value (matches use a
- * range of speeds, not just TEST_TARGET).</li>
+ * <li>kP search (log grid, then refine) using target-step recovery tests (see below).</li>
+ * <li>Re-test of the top candidates, then one step test at each CHECK_TARGETS value (matches use
+ * a range of speeds, not just TEST_TARGET).</li>
  * <li>Live verification: hold the target and measure real ball launches until Stop. Reports the
- * real dip depth so DIP_TICKS can be set from it.</li>
+ * real dip depth so STEP_TICKS can be set from it.</li>
  * </ol>
+ *
+ * <h3>Target-step recovery test</h3>
+ * The controller holds (T - STEP_TICKS) until it is inside the band, then the target is stepped to
+ * T. Once a ball dip happens the controller saturates at full power, so the rest of the recovery
+ * is the same as approaching T from below; the step reproduces that deterministically, with no
+ * slow spin-down. We measure the time until velocity is inside the band and stays there for
+ * RECOVERY_STAY_MS, the overshoot above T + deadband, and the number of deadband crossings. After
+ * recovery the flywheel keeps holding T for HOLD_MS to measure hold quality (velocity std dev,
+ * mean offset, power std dev). Each candidate runs STEPS_PER_CANDIDATE steps; between repeats the
+ * target is stepped back down to T - STEP_TICKS and allowed to settle.
  *
  * <h3>Cost function (lower is better)</h3>
  * <pre>
  * cost = recoveryTime_ms
- * + W_OVERSHOOT * overshoot_ticks_per_s (above target + noise deadband, after the dip)
- * + W_HOLD * holdVelocityStdDev (ticks/s, while settled, before the drop)
+ * + W_OVERSHOOT * overshoot_ticks_per_s (above target + noise deadband, after the step)
+ * + W_HOLD * holdVelocityStdDev (ticks/s, holding the target after recovery)
  * + W_OFFSET * |holdMeanError| (ticks/s, steady offset from target while holding)
- * + W_CHATTER * holdPowerStdDev (motor power units, while settled)
+ * + W_CHATTER * holdPowerStdDev (motor power units, while holding)
  * </pre>
  * Defaults make 1 ms of recovery worth about 0.5 ticks/s of overshoot, 0.1 ticks/s of hold
  * jitter, 0.1 ticks/s of steady offset, or 0.002 of power chatter. Candidates with sustained
@@ -68,24 +76,13 @@ import java.util.Locale;
  * with velocity), so the loop is blind to error changes under 0.01 / kP ticks/s. Candidates whose blind zone exceeds
  * MAX_RES_BAND_FRACTION of the band are rejected, and the zone is reported.
  *
- * <h3>useRaw edge</h3>
- * At err = useRaw the P zone outputs FF + kP * useRaw, while bang-bang outputs 1.0. If
- * kP * useRaw < 1 - FF there is a power jump at the edge (the flywheel has to pass through a
- * slower tail). The continuous value (1 - FF) / kP, taken at the lowest target in use, is added to
- * the useRaw candidates and the remaining jump is reported.
- *
  * <h3>Picking the winner</h3>
- * Costs from two drops are noisy and the cost curve is flat near the optimum, so the minimum
+ * Costs from two steps are noisy and the cost curve is flat near the optimum, so the minimum
  * cost is not the best pick. The best few candidates (within RETEST_WITHIN of the best, at most
- * RETEST_TOP) get extra drops that are merged into their averages before picking. Among candidates within KEEP_WITHIN of the best cost we choose:
- * <ul>
- * <li>kP: the SMALLEST (stays away from the oscillation edge; the old tuner's problem).</li>
- * <li>useRaw: the SMALLEST (bang-bang full power engages for smaller dips, so real balls that
- * dip less than the simulated drop still get a fast recovery; a wide PID zone would
- * recover them slowly). Holding is not affected: candidates are at least 2x the noise
- * band, so the hold always stays in the PID zone.</li>
- * </ul>
- * Candidates whose hold offset is bigger than the noise deadband are skipped as tie-break picks.
+ * RETEST_TOP) get extra steps that are merged into their averages before picking. Among
+ * candidates within KEEP_WITHIN of the best cost we choose the SMALLEST kP (stays away from the
+ * oscillation edge; the old tuner's problem). Candidates whose hold offset is bigger than the
+ * noise deadband are skipped as tie-break picks.
  *
  * <p>kV is a duty-cycle gain, so it scales with battery voltage. It is only valid near the
  * voltage printed on the final screen.
@@ -130,20 +127,19 @@ public class ShooterAutoTuner extends LinearOpMode {
     /** Skip the kV trim if open-loop error at target is already below this (percent). */
     public static double FF_TRIM_SKIP_PERCENT = 0.5;
 
-    // ---- Phase 2: drop test ----
-    public static double DIP_TICKS = 250;
-    /** Max time to wait for the flywheel to coast down by DIP_TICKS. */
-    public static double DIP_MAX_MS = 1500;
-    public static int DROPS_PER_CANDIDATE = 2;
-    /** Pre-drop window used to measure hold quality. */
+    // ---- Phase 2: target-step test ----
+    /** The step test holds (T - STEP_TICKS), then steps the target to T. Real dip depth is printed in Phase 3. */
+    public static double STEP_TICKS = 200;
+    public static int STEPS_PER_CANDIDATE = 2;
+    /** Window at the target, after recovery, used to measure hold quality. */
     public static double HOLD_MS = 1000;
-    /** Must be inside the band this long before a drop test starts. */
+    /** Must be inside the band this long before the step starts. */
     public static double SETTLE_BAND_STAY_MS = 300;
     public static double BAND_SETTLE_TIMEOUT_MS = 4000;
     /** Recovered = inside the band and staying there this long. */
     public static double RECOVERY_STAY_MS = 150;
     public static double RECOVERY_TIMEOUT_MS = 1500;
-    /** Keep watching this long after recovery to catch overshoot and ringing. */
+    /** Keep watching this long after recovery to catch overshoot and ringing (before the hold window). */
     public static double POST_RECOVERY_MS = 400;
     public static int OSC_CROSSINGS_MAX = 3;
     /** Shooter's CachedMotor skips power writes that change less than this. */
@@ -164,16 +160,10 @@ public class ShooterAutoTuner extends LinearOpMode {
     public static double KP_MAX = 0.04;
     public static int KP_GRID_POINTS = 8;
     public static int KP_REFINE_POINTS = 4;
-    /** Comma separated. Candidates smaller than 2x the recovery band are skipped. */
-    public static String USE_RAW_CANDIDATES = "60,90,120,180,250";
-    /** The continuity value (1-FF)/kP is added as a candidate only if it is at most this. */
-    public static double USE_RAW_CAP = 400;
-    /** Candidates above this multiple of DIP_TICKS are skipped: a simulated drop cannot reach them. */
-    public static double USE_RAW_MAX_DIP_MULT = 1.2;
-    /** The best candidates within this cost fraction get extra drops (up to RETEST_TOP of them). */
+    /** The best candidates within this cost fraction get extra steps (up to RETEST_TOP of them). */
     public static double RETEST_WITHIN = 0.25;
     public static int RETEST_TOP = 3;
-    /** Comma separated speeds (ticks/s) where the final kP/useRaw get one drop each. Matches use ~1500-2250. */
+    /** Comma separated speeds (ticks/s) where the final kP gets one step test each. Matches use ~1500-2250. */
     public static String CHECK_TARGETS = "1500,2250";
 
     // ---- Phase 3: live verification ----
@@ -211,19 +201,19 @@ public class ShooterAutoTuner extends LinearOpMode {
         double std;
     }
 
-    private static final class Drop {
+    private static final class StepResult {
         boolean ok;
         String reason = "";
-        double recoveryMs, overshoot, holdStd, holdMeanErr, powerStd, dipDepth;
+        double recoveryMs, overshoot, holdStd, holdMeanErr, powerStd;
         int crossings;
     }
 
     private static final class Candidate {
-        double kP, useRaw;
-        /** Number of successful drops averaged into the metrics. */
+        double kP;
+        /** Number of successful steps averaged into the metrics. */
         int n;
         double cost = Double.POSITIVE_INFINITY;
-        double recoveryMs, overshoot, holdStd, holdMeanErr, powerStd, dipDepth;
+        double recoveryMs, overshoot, holdStd, holdMeanErr, powerStd;
         int crossings;
         boolean rejected;
         String reason = "";
@@ -297,10 +287,8 @@ public class ShooterAutoTuner extends LinearOpMode {
     private boolean kVTrimmed;
     private double ffErrFitPercent, ffErrTrimPercent = Double.NaN;
     private double testTarget, noise, deadband, band;
-    private double tunedKP, tunedUseRaw;
+    private double tunedKP;
     private Candidate finalCandidate;
-    private int shortDipCount;
-    private double lowTarget;
     private final List<Double> checkTargets = new ArrayList<>();
     private final List<String> checkLines = new ArrayList<>();
 
@@ -341,7 +329,7 @@ public class ShooterAutoTuner extends LinearOpMode {
         tele.addLine("Shooter AutoTuner ready.");
         tele.addLine("The flywheel will spin up to near full power. Keep it clear, no balls loaded.");
         tele.addData("Test target", "%.0f ticks/s (edit TEST_TARGET on Dashboard)", TEST_TARGET);
-        tele.addLine("Press Start. Takes about 3-4 minutes, then verifies with real balls until Stop.");
+        tele.addLine("Press Start. Takes about 2 minutes, then verifies with real balls until Stop.");
         tele.update();
 
         waitForStart();
@@ -431,8 +419,7 @@ public class ShooterAutoTuner extends LinearOpMode {
 // ---------- Phase 2a: feedforward check + noise ----------
         feedforwardCheck();
 
-// ---------- Phase 2b: kP search ----------
-        double kpStageUseRaw = Math.max(origUseRaw, 2 * band);
+// ---------- Phase 2b: kP search (target-step tests) ----------
         List<Candidate> kpResults = new ArrayList<>();
         double kpFloor = CACHE_POWER_STEP / (Math.max(0.05, MAX_RES_BAND_FRACTION) * band);
         double kpMin = Math.max(Math.max(1e-5, KP_MIN), kpFloor);
@@ -449,13 +436,13 @@ public class ShooterAutoTuner extends LinearOpMode {
         }
         for (int i = 0; i < grid.length; i++) {
             status = String.format(Locale.US, "kP grid %d/%d", i + 1, grid.length);
-            kpResults.add(evaluate(grid[i], kpStageUseRaw));
+            kpResults.add(evaluate(grid[i]));
         }
 
         int bestIdx = bestIndex(kpResults);
         if (bestIdx < 0) {
             throw new TuneFailure("Every kP candidate was rejected (oscillation or no recovery). "
-                    + "Check that the flywheel is free, DIP_TICKS is sensible and the "
+                    + "Check that the flywheel is free, STEP_TICKS is sensible and the "
                     + "feedforward result above looks right.");
         }
 // Refine log-uniformly around the best grid point (extend past the edge if it is an edge).
@@ -465,11 +452,11 @@ public class ShooterAutoTuner extends LinearOpMode {
             double frac = i / (double) (KP_REFINE_POINTS + 1);
             double kp = lo * Math.pow(hi / lo, frac);
             status = String.format(Locale.US, "kP refine %d/%d", i, KP_REFINE_POINTS);
-            kpResults.add(evaluate(kp, kpStageUseRaw));
+            kpResults.add(evaluate(kp));
         }
 
         retestTop(kpResults);
-        Candidate kpPick = pickWithinBest(kpResults, true);
+        Candidate kpPick = pickWithinBest(kpResults);
         if (kpPick == null) {
             throw new TuneFailure("All refined kP candidates were rejected.");
         }
@@ -477,56 +464,7 @@ public class ShooterAutoTuner extends LinearOpMode {
         addLog(String.format(Locale.US, "kP pick %.5f (smallest within %.0f%% of best cost)",
                 tunedKP, KEEP_WITHIN * 100));
 
-// ---------- Phase 2c: useRaw search ----------
-        List<Candidate> rawResults = new ArrayList<>();
-        List<Double> rawCandidates = parseCsv(USE_RAW_CANDIDATES);
-// Continuous edge: P zone output at err = useRaw equals 1.0 when useRaw = (1 - FF) / kP.
-// Taken at the lowest target in use (smallest FF = largest value, so it is continuous there
-// and merely saturated at higher targets).
-        double ffLow = clamp01(kVUsed * lowTarget + kSUsed);
-        double cont = ffLow < 1 ? Math.round((1 - ffLow) / tunedKP) : 0;
-        if (cont >= 2 * band && cont <= USE_RAW_CAP) {
-            boolean dup = false;
-            for (double u : rawCandidates) {
-                dup |= Math.abs(u - cont) <= 0.1 * cont;
-            }
-            if (!dup) {
-                rawCandidates.add(cont);
-                addLog(String.format(Locale.US, "useRaw %.0f added: continuous edge (1-FF)/kP at %.0f",
-                        cont, lowTarget));
-            }
-        }
-        Collections.sort(rawCandidates);
-        int idx = 0;
-        for (double u : rawCandidates) {
-            idx++;
-            if (u < 2 * band) {
-                addLog(String.format(Locale.US, "useRaw %.0f skipped (< 2x band %.0f)", u, band));
-                continue;
-            }
-            if (u > USE_RAW_MAX_DIP_MULT * DIP_TICKS) {
-                addLog(String.format(Locale.US, "useRaw %.0f skipped (sim dip %.0f never reaches it)",
-                        u, DIP_TICKS));
-                continue;
-            }
-            status = String.format(Locale.US, "useRaw %d/%d", idx, rawCandidates.size());
-            if (Math.abs(u - kpStageUseRaw) < 1e-9) {
-// Exactly the configuration the kP stage already measured; do not re-measure.
-                rawResults.add(kpPick);
-            } else {
-                rawResults.add(evaluate(tunedKP, u));
-            }
-        }
-        if (rawResults.isEmpty()) {
-            rawResults.add(kpPick);
-        }
-        retestTop(rawResults);
-        Candidate rawPick = pickWithinBest(rawResults, false);
-        if (rawPick == null) {
-            rawPick = kpPick;
-        }
-        tunedUseRaw = rawPick.useRaw;
-        finalCandidate = rawPick;
+        finalCandidate = kpPick;
 
         runChecks();
         graphTarget = testTarget;
@@ -536,7 +474,6 @@ public class ShooterAutoTuner extends LinearOpMode {
         Shooter.kV = kVUsed;
         Shooter.kS = kSUsed;
         Shooter.kP = tunedKP;
-        Shooter.useRaw = tunedUseRaw;
 
         for (String line : resultLines()) {
             RobotLog.ii("ShooterAutoTuner", "%s", line); // never pass text as the format (it has % signs)
@@ -701,7 +638,7 @@ public class ShooterAutoTuner extends LinearOpMode {
     }
 
 // ================================================================
-// PHASE 2B/C: DROP TESTS
+// PHASE 2B: TARGET-STEP TESTS
 // ================================================================
 
     /** Width of the zone where the 0.01 CachedMotor step hides the error from the controller. */
@@ -714,17 +651,16 @@ public class ShooterAutoTuner extends LinearOpMode {
                 + W_OFFSET * c.holdMeanErr + W_CHATTER * c.powerStd;
     }
 
-    private Candidate evaluate(double kP, double useRaw) {
+    private Candidate evaluate(double kP) {
         Candidate c = new Candidate();
         c.kP = kP;
-        c.useRaw = useRaw;
         double blind = blindZone(kP);
         if (blind > Math.max(0.05, MAX_RES_BAND_FRACTION) * band) {
             c.rejected = true;
             c.reason = String.format(Locale.US, "0.01 power step hides errors < %.1f ticks/s (band %.0f)",
                     blind, band);
         } else {
-            c = measure(kP, useRaw);
+            c = measure(kP);
         }
         logCandidate("", c);
         return c;
@@ -732,25 +668,24 @@ public class ShooterAutoTuner extends LinearOpMode {
 
     private void logCandidate(String prefix, Candidate c) {
         if (c.rejected) {
-            addLog(String.format(Locale.US, "%skP %.5f uR %.0f REJECT: %s", prefix, c.kP, c.useRaw, c.reason));
+            addLog(String.format(Locale.US, "%skP %.5f REJECT: %s", prefix, c.kP, c.reason));
         } else {
             addLog(String.format(Locale.US,
-                    "%skP %.5f uR %.0f rec %.0fms ov %.0f hold %.1f off %.1f pw %.3f blind %.1f cost %.0f (n=%d)",
-                    prefix, c.kP, c.useRaw, c.recoveryMs, c.overshoot, c.holdStd, c.holdMeanErr, c.powerStd,
+                    "%skP %.5f rec %.0fms ov %.0f hold %.1f off %.1f pw %.3f blind %.1f cost %.0f (n=%d)",
+                    prefix, c.kP, c.recoveryMs, c.overshoot, c.holdStd, c.holdMeanErr, c.powerStd,
                     blindZone(c.kP), c.cost, c.n));
         }
     }
 
-    /** Runs DROPS_PER_CANDIDATE simulated drops and averages them. */
-    private Candidate measure(double kP, double useRaw) {
+    /** Runs STEPS_PER_CANDIDATE target-step tests and averages them. */
+    private Candidate measure(double kP) {
         Candidate c = new Candidate();
         c.kP = kP;
-        c.useRaw = useRaw;
 
-        double sRec = 0, sOver = 0, sHoldStd = 0, sHoldErr = 0, sPow = 0, sDip = 0;
+        double sRec = 0, sOver = 0, sHoldStd = 0, sHoldErr = 0, sPow = 0;
         int done = 0;
-        for (int d = 0; d < Math.max(1, DROPS_PER_CANDIDATE); d++) {
-            Drop r = runDrop(kP, useRaw, testTarget);
+        for (int d = 0; d < Math.max(1, STEPS_PER_CANDIDATE); d++) {
+            StepResult r = runStep(kP, testTarget);
             c.crossings = Math.max(c.crossings, r.crossings);
             if (!r.ok) {
                 c.rejected = true;
@@ -760,9 +695,8 @@ public class ShooterAutoTuner extends LinearOpMode {
             sRec += r.recoveryMs;
             sOver += r.overshoot;
             sHoldStd += r.holdStd;
-            sHoldErr += Math.abs(r.holdMeanErr); // abs per drop so +/- offsets do not cancel
+            sHoldErr += Math.abs(r.holdMeanErr); // abs per step so +/- offsets do not cancel
             sPow += r.powerStd;
-            sDip += r.dipDepth;
             done++;
         }
 
@@ -773,17 +707,13 @@ public class ShooterAutoTuner extends LinearOpMode {
             c.holdStd = sHoldStd / done;
             c.holdMeanErr = sHoldErr / done;
             c.powerStd = sPow / done;
-            c.dipDepth = sDip / done;
             c.cost = costOf(c);
-            if (c.dipDepth < 0.5 * DIP_TICKS) {
-                shortDipCount++;
-            }
         }
         sampleVoltage();
         return c;
     }
 
-    /** Folds extra measurements b into a (weighted by drop count). A failure in b rejects a. */
+    /** Folds extra measurements b into a (weighted by step count). A failure in b rejects a. */
     private void merge(Candidate a, Candidate b) {
         a.crossings = Math.max(a.crossings, b.crossings);
         if (b.rejected) {
@@ -800,14 +730,13 @@ public class ShooterAutoTuner extends LinearOpMode {
         a.holdStd = (a.holdStd * wa + b.holdStd * wb) / w;
         a.holdMeanErr = (a.holdMeanErr * wa + b.holdMeanErr * wb) / w;
         a.powerStd = (a.powerStd * wa + b.powerStd * wb) / w;
-        a.dipDepth = (a.dipDepth * wa + b.dipDepth * wb) / w;
         a.n += b.n;
         a.cost = costOf(a);
     }
 
     /**
-     * Two noisy drops cannot separate candidates that are within about 10% of each other, so the
-     * best few get more drops before the "smallest within KEEP_WITHIN" pick is made.
+     * Two noisy steps cannot separate candidates that are within about 10% of each other, so the
+     * best few get more steps before the "smallest within KEEP_WITHIN" pick is made.
      */
     private void retestTop(List<Candidate> list) {
         int b = bestIndex(list);
@@ -829,36 +758,34 @@ public class ShooterAutoTuner extends LinearOpMode {
         });
         for (int i = 0; i < Math.min(top.size(), RETEST_TOP); i++) {
             Candidate c = top.get(i);
-            status = String.format(Locale.US, "re-test %d/%d kP %.5f uR %.0f", i + 1,
-                    Math.min(top.size(), RETEST_TOP), c.kP, c.useRaw);
-            merge(c, measure(c.kP, c.useRaw));
+            status = String.format(Locale.US, "re-test %d/%d kP %.5f", i + 1,
+                    Math.min(top.size(), RETEST_TOP), c.kP);
+            merge(c, measure(c.kP));
             logCandidate("retest ", c);
         }
     }
 
     private void buildCheckTargets() {
         double hi = 0.9 * maxVelocity;
-        lowTarget = testTarget;
         for (double t : parseCsv(CHECK_TARGETS)) {
             boolean usable = t >= 3 * MIN_FIT_VELOCITY && t <= hi
                     && Math.abs(t - testTarget) >= 0.05 * testTarget;
             if (usable && checkTargets.size() < 3) {
                 checkTargets.add(t);
-                lowTarget = Math.min(lowTarget, t);
             }
         }
     }
 
-    /** One drop at each check target with the final gains; reported, not used for selection. */
+    /** One step test at each check target with the final gains; reported, not used for selection. */
     private void runChecks() {
         for (double t : checkTargets) {
             status = String.format(Locale.US, "check @%.0f", t);
-            Drop r = runDrop(tunedKP, tunedUseRaw, t);
+            StepResult r = runStep(tunedKP, t);
             String line;
             if (r.ok) {
                 line = String.format(Locale.US,
-                        "Check @%.0f: recover %.0f ms, overshoot %.0f, hold std %.1f, offset %.1f, dip %.0f",
-                        t, r.recoveryMs, r.overshoot, r.holdStd, Math.abs(r.holdMeanErr), r.dipDepth);
+                        "Check @%.0f: recover %.0f ms, overshoot %.0f, hold std %.1f, offset %.1f",
+                        t, r.recoveryMs, r.overshoot, r.holdStd, Math.abs(r.holdMeanErr));
             } else {
                 line = String.format(Locale.US, "Check @%.0f: FAILED (%s) - gains may not hold across speeds",
                         t, r.reason);
@@ -868,59 +795,41 @@ public class ShooterAutoTuner extends LinearOpMode {
         }
     }
 
-    /** One simulated ball drop at the given gains. */
-    private Drop runDrop(double kP, double useRaw, double target) {
-        Drop out = new Drop();
-        graphTarget = target;
-        driveClosedLoop(kP, useRaw, target);
+    /**
+     * One target-step test at the given kP: settle at (target - STEP_TICKS), step the target to
+     * {@code target}, measure the recovery, then measure hold quality at the target. The settle
+     * phase also serves as the controlled step DOWN between repeats.
+     */
+    private StepResult runStep(double kP, double target) {
+        StepResult out = new StepResult();
+        double stepTicks = Math.min(STEP_TICKS, target - MIN_FIT_VELOCITY);
+        if (stepTicks <= 2 * band) {
+            out.reason = "step " + fmt(stepTicks, 0) + " ticks/s is not larger than 2x band "
+                    + fmt(band, 0) + " (raise STEP_TICKS)";
+            return out;
+        }
+        double pre = target - stepTicks;
 
-// 1. Get to steady state under these gains.
-        status = String.format(Locale.US, "kP %.5f uR %.0f: settling", kP, useRaw);
+// 1. Get to steady state just below the target under these gains.
+        status = String.format(Locale.US, "kP %.5f: settling at %.0f", kP, pre);
+        graphTarget = pre;
+        driveClosedLoop(kP, pre);
         if (!waitInBand(BAND_SETTLE_TIMEOUT_MS)) {
-            out.reason = "never settled in band";
+            out.reason = "never settled at T-step (" + fmt(pre, 0) + ")";
             return out;
         }
 
-// 2. Hold quality, measured before the disturbance.
-        status = String.format(Locale.US, "kP %.5f uR %.0f: holding", kP, useRaw);
-        RunningStats vel = new RunningStats();
-        RunningStats pow = new RunningStats();
-        double h0 = nowMs;
-        while (nowMs - h0 < HOLD_MS) {
-            tick();
-            vel.add(shooter.velocity() - target);
-            pow.add(shooter.power());
-        }
-        out.holdStd = vel.std();
-        out.holdMeanErr = vel.mean();
-        out.powerStd = pow.std();
-
-// 3. Cut power until velocity has dropped by DIP_TICKS. Power 0 comes from the real
-// update() (disabled branch), never from us writing the motor directly.
-        status = String.format(Locale.US, "kP %.5f uR %.0f: dropping", kP, useRaw);
-        double vBefore = shooter.velocity();
-        shooter.disable();
-        double d0 = nowMs;
-        double vMin = vBefore;
-        while (true) {
-            tick();
-            vMin = Math.min(vMin, shooter.velocity());
-            if (shooter.velocity() <= target - DIP_TICKS || nowMs - d0 >= DIP_MAX_MS) {
-                break;
-            }
-        }
-        out.dipDepth = target - vMin;
-
-// 4. Let the controller recover, and watch for overshoot and ringing.
-        status = String.format(Locale.US, "kP %.5f uR %.0f: recovering", kP, useRaw);
-        shooter.enable();
+// 2. Step the target up and watch the recovery. The controller saturates, just as after a dip.
+        status = String.format(Locale.US, "kP %.5f: stepping to %.0f", kP, target);
+        graphTarget = target;
+        shooter.target(target);
         double t0 = nowMs; // same clock as every other timestamp in this loop
         double vMax = Double.NEGATIVE_INFINITY;
         double stayStart = -1;
         double recoveredEntry = -1;
         double confirmAt = -1;
-// Start on whichever side of target the flywheel is on right after the dip.
-        int sideState = shooter.velocity() > target + deadband ? 1 : -1;
+// The step starts below the band, so the first side is "below".
+        int sideState = -1;
         int crossings = 0;
 
         while (true) {
@@ -968,6 +877,20 @@ public class ShooterAutoTuner extends LinearOpMode {
         out.recoveryMs = recoveredEntry - t0;
 // Overshoot beyond the noise deadband; otherwise every candidate gets a free ~3 sigma penalty.
         out.overshoot = Math.max(0, vMax - target - deadband);
+
+// 3. Hold quality at the target, after recovery and ringing have been observed.
+        status = String.format(Locale.US, "kP %.5f: holding %.0f", kP, target);
+        RunningStats vel = new RunningStats();
+        RunningStats pow = new RunningStats();
+        double h0 = nowMs;
+        while (nowMs - h0 < HOLD_MS) {
+            tick();
+            vel.add(shooter.velocity() - target);
+            pow.add(shooter.power());
+        }
+        out.holdStd = vel.std();
+        out.holdMeanErr = vel.mean();
+        out.powerStd = pow.std();
         out.ok = true;
         return out;
     }
@@ -1006,9 +929,9 @@ public class ShooterAutoTuner extends LinearOpMode {
 
     /**
      * Among non-rejected candidates within KEEP_WITHIN of the best cost, returns the one with the
-     * smallest kP (preferSmallKp) or the smallest useRaw.
+     * smallest kP.
      */
-    private Candidate pickWithinBest(List<Candidate> list, boolean preferSmallKp) {
+    private Candidate pickWithinBest(List<Candidate> list) {
         int b = bestIndex(list);
         if (b < 0) {
             return null;
@@ -1020,7 +943,7 @@ public class ShooterAutoTuner extends LinearOpMode {
             if (c.rejected || c.cost > limit || c.holdMeanErr > deadband) {
                 continue;
             }
-            if (preferSmallKp ? c.kP < pick.kP : c.useRaw < pick.useRaw) {
+            if (c.kP < pick.kP) {
                 pick = c;
             }
         }
@@ -1155,29 +1078,27 @@ public class ShooterAutoTuner extends LinearOpMode {
 // ================================================================
 
     /**
-     * Makes Shooter.update() output exactly {@code power}: with kP = kS = 0, a huge useRaw and
-     * target = 1, the control law reduces to max(0, kV * 1).
+     * Makes Shooter.update() output exactly {@code power}: with kP = kS = 0 and target = 1, the
+     * control law reduces to clamp(kV * 1).
      */
     private void driveOpenLoop(double power) {
         Shooter.kP = 0;
         Shooter.kS = 0;
-        Shooter.useRaw = 1e9;
         Shooter.kV = power;
         shooter.target(1.0);
         shooter.enable();
     }
 
-    private void driveClosedLoop(double kP, double useRaw, double target) {
+    private void driveClosedLoop(double kP, double target) {
         Shooter.kV = kVUsed;
         Shooter.kS = kSUsed;
         Shooter.kP = kP;
-        Shooter.useRaw = useRaw;
         shooter.target(target);
         shooter.enable();
     }
 
     private void driveTunedClosedLoop(double target) {
-        driveClosedLoop(tunedKP, tunedUseRaw, target);
+        driveClosedLoop(tunedKP, target);
     }
 
     private void motorOff() {
@@ -1289,7 +1210,7 @@ public class ShooterAutoTuner extends LinearOpMode {
         return den < 1e-9 ? 0 : num / den;
     }
 
-    /** Coast to a stop at 0 power so the first ramp step and the tau measurement start from rest. */
+    /** Spin down at 0 power until stopped so the first ramp step and the tau measurement start from rest. */
     private void waitUntilStopped() {
         status = "Waiting for flywheel to be stopped";
         driveOpenLoop(0);
@@ -1389,13 +1310,9 @@ public class ShooterAutoTuner extends LinearOpMode {
             double med = median(liveDips);
             tele.addData("Real dip depth last/median", "%.0f / %.0f ticks/s",
                     liveDips.get(liveDips.size() - 1), med);
-            tele.addLine(String.format(Locale.US, "Suggested DIP_TICKS = %.0f (now %.0f). Dip is measured "
-                    + "with the controller running, so it is shallower than a bare ball hit.", med, DIP_TICKS));
-            if (med < tunedUseRaw) {
-                tele.addLine(String.format(Locale.US, "Real dips (%.0f) are smaller than useRaw (%.0f): real "
-                                + "shots recover in the P zone, never bang-bang. Rerun with DIP_TICKS = %.0f.",
-                        med, tunedUseRaw, med));
-            }
+            tele.addLine(String.format(Locale.US, "Suggested STEP_TICKS = %.0f (median real dip, now %.0f). "
+                            + "The dip is measured with the controller running, so it is shallower than a bare ball hit.",
+                    med, STEP_TICKS));
         }
         tele.addData("Hold std dev (last 1 s)", "%.1f ticks/s", liveHold.std());
         tele.addData("Hold mean error", "%.1f ticks/s", liveHold.mean());
@@ -1408,7 +1325,6 @@ public class ShooterAutoTuner extends LinearOpMode {
         lines.add(String.format(Locale.US, "kV = %.8f", kVUsed));
         lines.add(String.format(Locale.US, "kS = %.4f", kSUsed));
         lines.add(String.format(Locale.US, "kP = %.5f", tunedKP));
-        lines.add(String.format(Locale.US, "useRaw = %.0f", tunedUseRaw));
         lines.add(String.format(Locale.US, "kV fit %.8f%s R2 %.4f tau %s ms max %.0f ticks/s",
                 kVFit, kVTrimmed ? ", trimmed to " + fmt8(kVUsed) : " (used as is)", fitR2,
                 Double.isNaN(tauMs) ? "n/a" : fmt(tauMs, 0), maxVelocity));
@@ -1416,23 +1332,16 @@ public class ShooterAutoTuner extends LinearOpMode {
                 ffErrFitPercent, Double.isNaN(ffErrTrimPercent) ? ""
                         : String.format(Locale.US, ", after trim %+.2f%%", ffErrTrimPercent)));
         lines.add(String.format(Locale.US, "Sensor noise %.1f ticks/s, band +/-%.0f", noise, band));
-        double ffLowNow = clamp01(kVUsed * lowTarget + kSUsed);
-        lines.add(String.format(Locale.US,
-                "Power step 0.01: blind zone +/-%.1f ticks/s. Power jump at useRaw edge %.2f at %.0f "
-                        + "ticks/s (0 = continuous)",
-                blindZone(tunedKP), Math.max(0, 1 - (ffLowNow + tunedKP * tunedUseRaw)), lowTarget));
+        lines.add(String.format(Locale.US, "Power step 0.01: blind zone +/-%.1f ticks/s",
+                blindZone(tunedKP)));
         if (finalCandidate != null) {
             lines.add(String.format(Locale.US,
-                    "Sim drop (-%.0f): recover %.0f ms, overshoot %.0f, hold std %.1f, offset %.1f, "
+                    "Step test (T-%.0f -> T): recover %.0f ms, overshoot %.0f, hold std %.1f, offset %.1f, "
                             + "power std %.3f",
-                    DIP_TICKS, finalCandidate.recoveryMs, finalCandidate.overshoot,
+                    STEP_TICKS, finalCandidate.recoveryMs, finalCandidate.overshoot,
                     finalCandidate.holdStd, finalCandidate.holdMeanErr, finalCandidate.powerStd));
         }
         lines.addAll(checkLines);
-        if (shortDipCount > 0) {
-            lines.add("Note: " + shortDipCount + " candidate(s) coasted down less than half of "
-                    + "DIP_TICKS before the time cutoff; their recovery numbers are optimistic.");
-        }
         if (maxVoltage >= minVoltage) {
             lines.add(String.format(Locale.US,
                     "Battery during test: min %.2f V (max %.2f V). kV was measured at this voltage; "

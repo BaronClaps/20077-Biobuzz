@@ -24,7 +24,7 @@ public class Tele extends OpMode {
     private IntakeMode intakeMode = IntakeMode.STOP;
     private Timer transferTimer = new Timer();
     private boolean previouslyDetected = false, previouslySemi = false, previouslyIntakeStall = false, wasRaised = false, shooter = false, flower = false, adjustable = true, opened = true, rejectSequence = false;
-    public static double targetVelocity = 2180.0, hoodAngle = 0.275, angleOffset = 0.0;
+    public static double targetVelocity = 2180.0, hoodAngle = 0.275, offset = 0.0;
 
     public Tele(Alliance alliance) {
         this.alliance = alliance;
@@ -176,14 +176,14 @@ public class Tele extends OpMode {
 
         if (gamepad1.xWasPressed()) {
             robot.pose(alliance == Alliance.RED ? resetRed : resetBlue);
-            angleOffset = 0;
+            offset = 0;
         }
 
         if (gamepad1.dpadLeftWasPressed())
-            angleOffset += 5;
+            offset += 2;
 
         if (gamepad1.dpadRightWasPressed())
-            angleOffset -= 5;
+            offset -= 2;
 
         if (gamepad1.yWasPressed())
             targetVelocity += 20;
@@ -191,7 +191,7 @@ public class Tele extends OpMode {
         if (gamepad1.aWasPressed())
             targetVelocity -= 20;
 
-        robot.turret.angle(robot.turret.returnFace(AimTargets.target(alliance, robot.pose()), robot.pose()) + Math.toRadians(angleOffset));
+        robot.turret.angle(robot.turret.returnFace(AimTargets.target(alliance, robot.pose()).plus(Pose.zero().withX(robot.pose().y() >= 70.75 ? offset : -offset)), robot.pose()));
         robot.update();
 
         telemetryM.addData("Pose", robot.pose());
@@ -205,7 +205,7 @@ public class Tele extends OpMode {
         telemetryM.addData("Shooter Hood", robot.shooter.hood());
         telemetryM.addData("Distance from Target", AimTargets.target(alliance, robot.pose()).distance(robot.pose()));
         telemetryM.addData("X & Y from Target", AimTargets.target(alliance, robot.pose()).minus(robot.pose()));
-        telemetryM.addData("offset", angleOffset);
+        telemetryM.addData("offset", offset);
 //        telemetryM.addLine(robot.currentBreakdown());
         telemetryM.update();
     }

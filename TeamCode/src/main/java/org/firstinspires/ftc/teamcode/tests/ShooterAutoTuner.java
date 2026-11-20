@@ -205,7 +205,7 @@ public class ShooterAutoTuner extends LinearOpMode {
         telemetry.update();
 
         double targetVelocity =
-                maxObservedVelocity * STEP_TARGET_FRACTION;
+                2180.0;
 
         double criticalKp =
                 findCriticalKp(

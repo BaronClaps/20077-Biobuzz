@@ -30,7 +30,7 @@ public class TwoTip extends CommandOpMode {
 
         robot.pose(paths.start());
         robot.shooter.disable();
-        robot.turret.angle(Math.toRadians(-113));
+        robot.turret.angle(Math.toRadians(-115));
         robot.intake.close();
         robot.intake.stop();
         robot.intake.lowerAdjustable();
@@ -38,7 +38,7 @@ public class TwoTip extends CommandOpMode {
 
         schedule(
                 sequential(
-                        setup(1420, 0.45, -113),
+                        setup(2180, 0.45, -117),
                         instant(() -> robot.pose(paths.start())),
                         waitUntil(() -> robot.shooter.atTarget()),
                         waitMs(500),
@@ -49,31 +49,27 @@ public class TwoTip extends CommandOpMode {
                         paths.spike()
                                 .raceWith(waitMs(2000)),
                         waitMs(250),
+                        setup(2160, 0.455, 38),
                         paths.spikeShoot()
-                                .raceWith(waitMs(2000)),
+                                .raceWith(waitMs(5000)),
+                        waitMs(500),
+                        robot.shoot(),
+                        robot.intake.open,
+                        waitMs(200),
+                        robot.intake.out,
+                        waitMs(200),
                         robot.shoot(),
                         robot.intake.raiseAdjustable,
-                        robot.intake.open,
-                        robot.intake.stop,
-                        robot.intake.raiseFlower,
-                        setup(1000, 0.455, 38),
+                        robot.intake.lowerFlower,
+                        robot.intake(),
+                        setup(2160, 0.455, 38),
                         paths.flower1()
-                                .with(
-                                        waitUntil(() -> robot.follower.completion() > 0.8)
-                                                .then(
-                                                        robot.intake.raiseAdjustable,
-                                                        robot.intake.lowerFlower,
-                                                        robot.intake.close,
-                                                        robot.intake.in
-                                                )
-                                )
-                                .raceWith(waitMs(5000)),
-                        setup(1420, 0.455, 36.5),
+                                .raceWith(waitMs(3000)),
+                        setup(2160, 0.455, 36.5),
                         waitMs(2000),
                         paths.flower1Shoot()
                                 .raceWith(waitMs(2000)),
                         robot.intake.lowerAdjustable,
-                        robot.shoot(),
                         robot.shoot(),
                         robot.intake.raiseAdjustable,
                         robot.intake(),
@@ -91,7 +87,7 @@ public class TwoTip extends CommandOpMode {
                                 )
                                 .raceWith(waitMs(5000)),
                         waitMs(2000),
-                        setup(1420, 0.455, 38),
+                        setup(2160, 0.455, 38),
                         paths.score()
                                 .with(
                                         waitUntil(() -> robot.follower.completion() > 0.2)
@@ -101,6 +97,7 @@ public class TwoTip extends CommandOpMode {
                                 )
                                 .raceWith(waitMs(5000)),
                         robot.intake.lowerAdjustable,
+                        waitMs(500),
                         robot.shoot(),
 //                        robot.shoot(),
                         paths.park()

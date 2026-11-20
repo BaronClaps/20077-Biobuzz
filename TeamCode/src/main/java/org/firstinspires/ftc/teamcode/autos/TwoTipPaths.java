@@ -17,7 +17,7 @@ public class TwoTipPaths {
     public final PoseFactory poseFactory;
     public final Follower follower;
 
-    public final Pose start, spike, flower1, flower1Control1, flower1Control2, flower2, flower2Control1, flower2Control2, score, park;
+    public final Pose start, spike, flower1, flower1Control1, flower1Control2, flower2, flower2Control1, flower2Control2, score, parkControl, park;
 
     public TwoTipPaths(Follower follower, Alliance alliance) {
         this.follower = follower;
@@ -30,11 +30,11 @@ public class TwoTipPaths {
 
         start = poseFactory.of(88.75+23.622, 134.5, 0);
 
-        spike = poseFactory.of(131.5, 134.5, 0);
+        spike = poseFactory.of(132.5, 134.5, 0);
 
-        flower1 = poseFactory.of(92, 12.5, 270);
-        flower1Control1 = poseFactory.of(65, 100, 0);
-        flower1Control2 = poseFactory.of(72, 38, 0);
+        flower1 = poseFactory.of(95, 12, 270);
+        flower1Control1 = poseFactory.of(112, 40, 0);
+        flower1Control2 = poseFactory.of(92, 40, 0);
 
         flower2 = poseFactory.of(129.5, 94.33, 0);
         flower2Control1 = poseFactory.of(115, 40, 0);
@@ -42,7 +42,8 @@ public class TwoTipPaths {
 
         score = poseFactory.of(112, 11.5, 90);
 
-        park = poseFactory.of(125, 24, 90);
+        parkControl = poseFactory.of(112, 50, 90);
+        park = poseFactory.of(125, 40, 90);
     }
 
     public Pose start() {
@@ -58,14 +59,14 @@ public class TwoTipPaths {
 
     public CommandBuilder spikeShoot() {
         return follow(follower,
-                Paths.line(spike, start)
-                        .linear(spike, start));
+                Paths.line(spike, score)
+                        .linear(spike, score));
     }
 
     public CommandBuilder flower1() {
         return follow(follower,
-                Paths.curve(start, flower1Control1, flower1Control2, flower1)
-                        .constant(flower1).with(Constants.foresightConfig.brakeAtEnd.at(false)));
+                Paths.curve(score, flower1Control1, flower1Control2, flower1)
+                        .linear(score, flower1, 0.4));
     }
 
     public CommandBuilder flower1Shoot() {
@@ -93,7 +94,7 @@ public class TwoTipPaths {
 
     public CommandBuilder park() {
         return follow(follower,
-                Paths.line(score, park)
+                Paths.curve(score, parkControl, park)
                         .constant(park));
     }
 }

@@ -42,7 +42,7 @@ public class AstraPartner extends CommandOpMode {
                         robot.shooter.disable,
                         waitMs(5000),
                         robot.shooter.enable,
-                        setup(1400, 0.275, 31.5),
+                        setup(2160, 0.275, 31.5),
                         waitUntil(() -> robot.shooter.atTarget()),
                         waitMs(500),
 //                        waitMs(500),

@@ -86,7 +86,7 @@ public class Tele extends OpMode {
         }
 
         if (transferTimer.seconds() > 0.1 && !opened && intakeMode == IntakeMode.STOP) {
-            rejectSequence = true;
+            rejectSequence = false;
             intakeMode = IntakeMode.TRANSFER;
             opened = true;
         }

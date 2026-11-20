@@ -79,7 +79,7 @@ public class Robot {
                         .raceWith(waitMs(500)),
                 intake.open,
                 intake.transfer,
-                waitMs(1000),
+                waitMs(1500),
                 intake.in,
                 intake.close
         );

@@ -21,11 +21,13 @@ public class Shooter {
     private double target = 0, current = 0, hoodPosition, power;
     public static double kS = 0.035, kV = 0.00034769, kP = 0.005, useRaw = 120, targetThreshold = 20;
     public static double hoodMin = 0.2, hoodMax = 0.5;
+    public static double writeThreshold = 0.002, settleMs = 40;
+    private long inBandSince = -1;
     public boolean activated = false;
 
     public Shooter(HardwareMap hardwareMap) {
-//        top = new CachedMotor(hardwareMap.get(DcMotorEx.class, "shooterTop"), 0.01);
-        bottom = new CachedMotor(hardwareMap.get(DcMotorEx.class, "shooterBottom"), 0.01);
+// top = new CachedMotor(hardwareMap.get(DcMotorEx.class, "shooterTop"), 0.01);
+        bottom = new CachedMotor(hardwareMap.get(DcMotorEx.class, "shooterBottom"), writeThreshold);
         bottom.setDirection(DcMotorSimple.Direction.REVERSE);
         hood = hardwareMap.get(Servo.class, "hood");
     }
@@ -33,10 +35,17 @@ public class Shooter {
     public void update() {
         current = bottom.raw().getVelocity();
 
-        if (activated) {
-            if (Math.abs(target - velocity()) > useRaw)
-                power(Math.max(Math.signum(target() - velocity()), 0));
-            else
+        if (Math.abs(current - target) <= targetThreshold) {
+            if (inBandSince < 0)
+                inBandSince = System.nanoTime();
+        } else {
+            inBandSince = -1;
+        }
+
+        if (activated && target > 0) {
+//            if (Math.abs(target - velocity()) > useRaw)
+//                power(Math.max(Math.signum(target() - velocity()), 0));
+//            else
                 power(Math.max(0, (kV * target()) + (kP * (target() - velocity())) + kS));
         } else {
             power(0);
@@ -44,7 +53,8 @@ public class Shooter {
     }
 
     public void power(double power) {
-        // top.setPower(power);
+        power = Math.max(0, Math.min(1, power));
+// top.setPower(power);
         bottom.setPower(power);
         this.power = power;
     }
@@ -66,7 +76,7 @@ public class Shooter {
     }
 
     public boolean atTarget() {
-        return Math.abs(current - target) <= targetThreshold;
+        return inBandSince >= 0 && System.nanoTime() - inBandSince >= (long) (settleMs * 1e6);
     }
 
     public void activated(boolean activated) {

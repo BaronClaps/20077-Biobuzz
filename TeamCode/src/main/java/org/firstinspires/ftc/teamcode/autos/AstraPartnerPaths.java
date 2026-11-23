@@ -29,7 +29,7 @@ public class AstraPartnerPaths {
 
         start = poseFactory.of(32+6.25, 134.5, 270);
 
-        park = poseFactory.of(7, 141.5-17.5, 270);
+        park = poseFactory.of(7, 141.5-51, 270);
     }
 
     public Pose start() {

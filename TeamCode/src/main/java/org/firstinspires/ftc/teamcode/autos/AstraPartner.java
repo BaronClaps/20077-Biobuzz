@@ -7,11 +7,9 @@ import static com.pedropathing.ivy.groups.Groups.sequential;
 
 import com.pedropathing.ivy.CommandBuilder;
 import com.pedropathing.ivy.commands.Commands;
-import com.pedropathing.revhub.localizers.PinpointLocalizer;
 
 import org.firstinspires.ftc.teamcode.Robot;
-import org.firstinspires.ftc.teamcode.Tele;
-import org.firstinspires.ftc.teamcode.autos.TwoTipPaths;
+import org.firstinspires.ftc.teamcode.DualTele;
 import org.firstinspires.ftc.teamcode.utils.Alliance;
 import org.firstinspires.ftc.teamcode.utils.CommandOpMode;
 
@@ -44,10 +42,10 @@ public class AstraPartner extends CommandOpMode {
                         robot.shooter.enable,
                         setup(2160, 0.275, 31.5),
                         waitUntil(() -> robot.shooter.atTarget()),
-                        waitMs(500),
+//                        waitMs(500),
 //                        waitMs(500),
                         robot.shoot(),
-                        robot.shoot(),
+//                        robot.shoot(),
                         paths.park()
                                 .with(
                                         robot.intake.stop,
@@ -80,7 +78,7 @@ public class AstraPartner extends CommandOpMode {
     }
 
     public void stop() {
-        Tele.start = paths.park;
+        DualTele.start = paths.park;
         super.stop();
     }
 }

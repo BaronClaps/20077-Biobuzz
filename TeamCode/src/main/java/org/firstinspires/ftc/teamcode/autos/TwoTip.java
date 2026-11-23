@@ -7,11 +7,9 @@ import static com.pedropathing.ivy.groups.Groups.sequential;
 
 import com.pedropathing.ivy.CommandBuilder;
 import com.pedropathing.ivy.commands.Commands;
-import com.pedropathing.revhub.localizers.PinpointLocalizer;
 
 import org.firstinspires.ftc.teamcode.Robot;
-import org.firstinspires.ftc.teamcode.Tele;
-import org.firstinspires.ftc.teamcode.autos.TwoTipPaths;
+import org.firstinspires.ftc.teamcode.DualTele;
 import org.firstinspires.ftc.teamcode.utils.Alliance;
 import org.firstinspires.ftc.teamcode.utils.CommandOpMode;
 
@@ -30,7 +28,7 @@ public class TwoTip extends CommandOpMode {
 
         robot.pose(paths.start());
         robot.shooter.disable();
-        robot.turret.angle(Math.toRadians(-115));
+        robot.turret.angle(Math.toRadians(-117));
         robot.intake.close();
         robot.intake.stop();
         robot.intake.lowerAdjustable();
@@ -38,7 +36,7 @@ public class TwoTip extends CommandOpMode {
 
         schedule(
                 sequential(
-                        setup(2180, 0.45, -117),
+                        setup(2180, 0.45, -110),
                         instant(() -> robot.pose(paths.start())),
                         waitUntil(() -> robot.shooter.atTarget()),
                         waitMs(500),
@@ -49,7 +47,7 @@ public class TwoTip extends CommandOpMode {
                         paths.spike()
                                 .raceWith(waitMs(2000)),
                         waitMs(250),
-                        setup(2160, 0.455, 38),
+                        setup(2180, 0.455, 40),
                         paths.spikeShoot()
                                 .raceWith(waitMs(5000)),
                         waitMs(500),
@@ -62,14 +60,14 @@ public class TwoTip extends CommandOpMode {
                         robot.intake.raiseAdjustable,
                         robot.intake.lowerFlower,
                         robot.intake(),
-                        setup(2160, 0.455, 38),
+                        setup(2180, 0.455, 40),
                         paths.flower1()
                                 .raceWith(waitMs(3000)),
-                        setup(2160, 0.455, 36.5),
+                        setup(2180, 0.455, 40),
                         waitMs(2000),
                         paths.flower1Shoot()
                                 .raceWith(waitMs(2000)),
-                        robot.intake.lowerAdjustable,
+//                        robot.intake.lowerAdjustable,
                         robot.shoot(),
                         robot.intake.raiseAdjustable,
                         robot.intake(),
@@ -87,16 +85,17 @@ public class TwoTip extends CommandOpMode {
                                 )
                                 .raceWith(waitMs(5000)),
                         waitMs(2000),
-                        setup(2160, 0.455, 38),
+                        setup(2180, 0.455, 40),
                         paths.score()
                                 .with(
-                                        waitUntil(() -> robot.follower.completion() > 0.2)
+                                        waitUntil(() -> robot.follower.completion() > 0.3)
                                                 .then(
-                                                        robot.intake.raiseAdjustable
+                                                        robot.intake.raiseAdjustable,
+                                                        robot.intake.raiseFlower
                                                 )
                                 )
                                 .raceWith(waitMs(5000)),
-                        robot.intake.lowerAdjustable,
+//                        robot.intake.lowerAdjustable,
                         waitMs(500),
                         robot.shoot(),
 //                        robot.shoot(),
@@ -135,7 +134,7 @@ public class TwoTip extends CommandOpMode {
     }
 
     public void stop() {
-        Tele.start = robot.pose();
+        DualTele.start = robot.pose();
         super.stop();
     }
 }

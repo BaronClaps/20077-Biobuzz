@@ -67,35 +67,15 @@ public class Tele extends OpMode {
             opened = false;
         }
 
-        if (transferTimer.seconds() > 1.5 && intakeMode == IntakeMode.TRANSFER) {
+        if (transferTimer.seconds() > 1.6 && intakeMode == IntakeMode.TRANSFER) {
             intakeMode = IntakeMode.IN;
             robot.intake.close();
         }
 
-        if (transferTimer.seconds() > 1.2 && intakeMode == IntakeMode.OUT && rejectSequence) {
-            intakeMode = IntakeMode.TRANSFER;
-            rejectSequence = false;
-        }
-
-        if (transferTimer.seconds() > 1.05 && intakeMode == IntakeMode.STOP && rejectSequence) {
-            intakeMode = IntakeMode.OUT;
-        }
-
-        if (transferTimer.seconds() > 0.85 && intakeMode == IntakeMode.TRANSFER && rejectSequence) {
-            intakeMode = IntakeMode.STOP;
-        }
-
         if (transferTimer.seconds() > 0.1 && !opened && intakeMode == IntakeMode.STOP) {
-            rejectSequence = false;
             intakeMode = IntakeMode.TRANSFER;
             opened = true;
         }
-
-        if (gamepad1.dpadUpWasPressed())
-            hoodAngle += 0.025;
-
-        if (gamepad1.startWasPressed())
-            hoodAngle -= 0.025;
 
         if (gamepad1.backWasPressed())
             robot.follower.localizer.reset();
@@ -179,16 +159,16 @@ public class Tele extends OpMode {
             offset = 0;
         }
 
-        if (gamepad1.dpadLeftWasPressed())
+        if (gamepad2.dpadLeftWasPressed())
             offset += 2;
 
-        if (gamepad1.dpadRightWasPressed())
+        if (gamepad2.dpadRightWasPressed())
             offset -= 2;
 
-        if (gamepad1.yWasPressed())
+        if (gamepad2.dpadUpWasPressed())
             targetVelocity += 20;
 
-        if (gamepad1.aWasPressed())
+        if (gamepad2.dpadDownWasPressed())
             targetVelocity -= 20;
 
         robot.turret.angle(robot.turret.returnFace(AimTargets.target(alliance, robot.pose()).plus(Pose.zero().withX(robot.pose().y() >= 70.75 ? offset : -offset)), robot.pose()));

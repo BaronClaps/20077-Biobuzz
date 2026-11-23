@@ -23,7 +23,7 @@ public class DualTele extends OpMode {
     public static Pose resetBlue = new Pose(141.5 - 7, 141.5 - (6.5 + 24 + 2), Math.toRadians(180));
     private IntakeMode intakeMode = IntakeMode.STOP;
     private Timer transferTimer = new Timer();
-    private boolean previouslyDetected = false, previouslySemi = false, previouslyIntakeStall = false, wasRaised = false, shooter = false, flower = false, adjustable = true, opened = true, rejectSequence = false;
+    private boolean previouslyDetected = false, previouslySemi = false, previouslyIntakeStall = false, wasRaised = false, shooter = false, flower = false, adjustable = true, opened = false;
     public static double targetVelocity = 2160.0, hoodAngle = 0.275, offset = 0.0;
 
     public DualTele(Alliance alliance) {
@@ -64,31 +64,17 @@ public class DualTele extends OpMode {
             transferTimer.reset();
             robot.intake.open();
             intakeMode = IntakeMode.STOP;
-            opened = false;
+            opened = true;
         }
 
-        if (transferTimer.seconds() > 1.5 && intakeMode == IntakeMode.TRANSFER) {
+        if (transferTimer.seconds() > 1.7 && intakeMode == IntakeMode.TRANSFER) {
             intakeMode = IntakeMode.IN;
             robot.intake.close();
         }
 
-        if (transferTimer.seconds() > 1.2 && intakeMode == IntakeMode.OUT && rejectSequence) {
+        if (transferTimer.seconds() > 0.2 && opened && intakeMode == IntakeMode.STOP) {
             intakeMode = IntakeMode.TRANSFER;
-            rejectSequence = false;
-        }
-
-        if (transferTimer.seconds() > 1.05 && intakeMode == IntakeMode.STOP && rejectSequence) {
-            intakeMode = IntakeMode.OUT;
-        }
-
-        if (transferTimer.seconds() > 0.85 && intakeMode == IntakeMode.TRANSFER && rejectSequence) {
-            intakeMode = IntakeMode.STOP;
-        }
-
-        if (transferTimer.seconds() > 0.1 && !opened && intakeMode == IntakeMode.STOP) {
-            rejectSequence = false;
-            intakeMode = IntakeMode.TRANSFER;
-            opened = true;
+            opened = false;
         }
 
         if (gamepad1.backWasPressed())
@@ -147,7 +133,7 @@ public class DualTele extends OpMode {
         if (gamepad1.leftBumperWasPressed())
             adjustable = !adjustable;
 
-        if (gamepad1.rightTriggerWasPressed())
+        if (gamepad2.rightTriggerWasPressed())
             shooter = !shooter;
 
         if (adjustable)
@@ -174,10 +160,10 @@ public class DualTele extends OpMode {
         }
 
         if (gamepad2.dpadLeftWasPressed())
-            offset += 2;
+            offset += 5;
 
         if (gamepad2.dpadRightWasPressed())
-            offset -= 2;
+            offset -= 5;
 
         if (gamepad2.dpadUpWasPressed())
             targetVelocity += 20;

@@ -46,11 +46,11 @@ public class Detect implements VisionProcessor, CameraStreamSource {
     public static int whiteBalanceK = 0, exposureMs = 0, gain = 0;
     // ---- camera mount, relative to the robot centre (inches, degrees). The only copy: Pickup/Impose read these too ----
     public static double camForwardIn = 0, camLeftIn = 0; // PLACEHOLDER: measure on robot
-    public static double camHeightIn = 4; // PLACEHOLDER: measure on robot
-    public static double camPitchDownDeg = 0, camYawLeftDeg = 0; // PLACEHOLDER: measure on robot (0 = straight ahead)
+    public static double camHeightIn = 4; // measured: lens height above the floor
+    public static double camPitchDownDeg = 15, camYawLeftDeg = 0; // pitch measured; yaw 0 = straight ahead
 
     public static int tileR = 128, tileG = 128, tileB = 128; // equal = no white-balance correction (C270 colours are already neutral)
-    public static int minHue = 70, maxHue = 118, minChroma = 40, minBright = 61, maxBright = 255;
+    public static int minHue = 70, maxHue = 118, minChroma = 20, minBright = 61, maxBright = 255; // C270 + beige carpet: carpet sits at chroma 10-15, ball 20-35
     public static int holeFillMaxPx = 24;
     public static int blemishMaxPx = 12, blemishDarkness = 15, smoothSize = 15;
     public static int singleMinAreaPx = 60;
@@ -2726,6 +2726,7 @@ public class Detect implements VisionProcessor, CameraStreamSource {
         balls.addAll(estimated);
         double[] origin = floorPoint((W - 1) / 2.0, H - 1, 0);
         double focal = (calMatrix.get(0, 0)[0] + calMatrix.get(1, 1)[0]) / 2;
+        StringBuilder found = new StringBuilder();
         for (Found b : balls) {
             double[] p = floorPoint(b.x, b.y, ballRadiusCm);
             b.raw = p;
@@ -2739,9 +2740,13 @@ public class Detect implements VisionProcessor, CameraStreamSource {
                     b.kept = Math.abs(b.r * b.r - e * e) <= sizeFilterPctg * e * e;
                 }
             }
+            String why = !b.kept ? "size" : b.r < ballMinRadiusPx || b.r > ballMaxRadiusPx ? "radius limits" : b.y < cutoff ? "above row " + cutoff : "";
             b.kept = b.kept && ballMinRadiusPx <= b.r && b.r <= ballMaxRadiusPx;
             if (b.y < cutoff) b.kept = false;
+            found.append(String.format(Locale.US, "\n (%.0f, %.0f) r %.0f, expected r %s%s", b.x, b.y, b.r,
+                    b.expected < 0 ? "none (above horizon)" : String.format(Locale.US, "%.0f", b.expected), why.isEmpty() ? "" : ", DROPPED: " + why));
         }
+        debugFound = found.toString();
         return balls;
     }
 
@@ -3385,7 +3390,8 @@ public class Detect implements VisionProcessor, CameraStreamSource {
     public volatile int debugKept = 0;
     public static volatile double debugMaskPct = 0; // % of the image that passed the colour test, last frame
     public static volatile String debugChroma = ""; // % of image with yellow hue and OK brightness, per chroma floor
-    public static volatile String debugCenter = ""; // colour at the image centre, last frame, vs the thresholds
+    public static volatile String debugCenter = "";
+    public static volatile String debugFound = ""; // every circle found, last frame, and why it was dropped // colour at the image centre, last frame, vs the thresholds
     public volatile String debugStages = "";
     public volatile String debugError = "";
 

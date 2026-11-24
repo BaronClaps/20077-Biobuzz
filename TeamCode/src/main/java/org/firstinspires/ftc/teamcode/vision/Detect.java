@@ -633,10 +633,8 @@ public class Detect implements VisionProcessor, CameraStreamSource {
             Imgproc.dilate(aHoleIn, aHoleOut, ring);
             toc(s);
             aGetBytesInto(aHoleOut, holes);
-            for (int i = 0; i < total; i++) holes[i] = (byte) (holes[i] & filled[i]);
-        } else {
-            Arrays.fill(holes, (byte) 0);
         }
+        final boolean hasHoles = anyDiff;
         int window = Math.min(Math.max(2 * blemishMaxPx + 1, 3), 255);
         aDarkBuf = aBuf(aDarkBuf, total);
         final byte[] dark = aDarkBuf;
@@ -665,7 +663,7 @@ public class Detect implements VisionProcessor, CameraStreamSource {
         aOutliersBuf = aBuf(aOutliersBuf, total);
         byte[] outliers = aOutliersBuf;
         boolean any = false;
-        for (int i = 0; i < total; i++) { byte v = (byte) (dark[i] | holes[i]); outliers[i] = v; if (v != 0) any = true; }
+        for (int i = 0; i < total; i++) { byte v = (byte) (hasHoles ? dark[i] | (holes[i] & filled[i]) : dark[i]); outliers[i] = v; if (v != 0) any = true; }
         aAnyBlemish = false;
         if (!any) return outliers;
         int[] cnt = new int[1];

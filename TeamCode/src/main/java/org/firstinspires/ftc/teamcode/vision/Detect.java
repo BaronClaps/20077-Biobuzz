@@ -1060,6 +1060,7 @@ public class Detect implements VisionProcessor, CameraStreamSource {
     static float[] bSoft;
 
     static float[] bClimbBlur;
+    static double bClimbSigma; // seedClimbBlurPx read once per frame, so bClimbBlur and climbValues agree if the dashboard changes it
     static float[][] bSlopes;
 
     /** Level values of the inside pixels over box b (0 elsewhere). */
@@ -1078,14 +1079,15 @@ public class Detect implements VisionProcessor, CameraStreamSource {
         float[] f = new float[bw * bh];
         byte[] ib = new byte[bw * bh];
         for (int k = 0; k < insideCount; k++) { int g = insideIdx[k], i = (g / W - b.top) * bw + g % W - b.left; f[i] = 1f; ib[i] = 1; }
-        final Box vb = insideBox(24), cb = insideBox((int) Math.rint(4 * Math.max(seedClimbBlurPx, 0)) + 4);
+        final double climbSigma = bClimbSigma = seedClimbBlurPx;
+        final Box vb = insideBox(24), cb = insideBox((int) Math.rint(4 * Math.max(climbSigma, 0)) + 4);
         final float[] vv = boxLevels(vb, level), cv = boxLevels(cb, level);
         final float[][] blurs = new float[3][];
         runAll(Arrays.<Runnable>asList(
                 () -> bMaxDist5 = maxDistance(insideBytes, 5),
                 () -> blurs[0] = gauss(f, bh, bw, 1.5),
                 () -> blurs[1] = gaussOwn(vv, vb.bottom - vb.top, vb.right - vb.left, 1.5),
-                () -> blurs[2] = seedClimbBlurPx > 0 ? gaussOwn(cv, cb.bottom - cb.top, cb.right - cb.left, seedClimbBlurPx) : cv));
+                () -> blurs[2] = climbSigma > 0 ? gaussOwn(cv, cb.bottom - cb.top, cb.right - cb.left, climbSigma) : cv));
         final float[] soft = blurs[0];
         bSoft = soft; bClimbBlur = blurs[2];
         final int vw = vb.right - vb.left, vh = vb.bottom - vb.top;
@@ -1437,7 +1439,7 @@ public class Detect implements VisionProcessor, CameraStreamSource {
         stage("seeds: coverage votes");
         List<double[]> kept = spacedPeaks(coverage, seedMinCoverPctg, null, rowRadius, insideImage, seedSpacingPctg, seedMinFillPctg);
         stage("seeds: spaced peaks");
-        float[] climb = climbValues(inside, insideBytes, level, seedClimbBlurPx);
+        float[] climb = climbValues(inside, insideBytes, level, bClimbSigma);
         stage("seeds: climb");
         Map<Integer, int[]> firstOnTop = new HashMap<>();
         int[] seedIdx = new int[kept.size()];

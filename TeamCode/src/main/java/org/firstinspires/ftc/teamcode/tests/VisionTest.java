@@ -66,6 +66,8 @@ public class VisionTest extends LinearOpMode {
         report.add(String.format(Locale.US, "Counts: singles %d, seeds %d, circles %d, estimated %d, kept %d",
                 detect.debugSingles, detect.debugSeeds, detect.debugCircles, detect.debugEstimated, detect.debugKept));
         if (!detect.debugError.isEmpty()) report.add("Error: " + detect.debugError);
+        report.add(String.format(Locale.US, "Colour mask: %.1f%% of image", Detect.debugMaskPct));
+        report.add("Centre colour: " + Detect.debugCenter);
 
         report.add(String.format(Locale.US, "Raw balls: %d (image %dx%d)", frame.balls.size(), Detect.frameW, Detect.frameH));
         for (int i = 0; i < frame.balls.size(); i++) {

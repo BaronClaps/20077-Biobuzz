@@ -533,12 +533,27 @@ public class Detect implements VisionProcessor, CameraStreamSource {
         aMaskBuf = aBuf(aMaskBuf, total);
         aLightBuf = aBuf(aLightBuf, total);
         byte[] all = aLabBuf, mask = aMaskBuf, lightness = aLightBuf, table = colorTable;
+        int on = 0;
         for (int i = 0; i < total; i++) {
             int l = all[i * 3] & 255, a = all[i * 3 + 1] & 255, b = all[i * 3 + 2] & 255;
             lightness[i] = all[i * 3];
             mask[i] = (byte) (table[a * 256 + b] != 0 && l >= minBright && l <= maxBright ? 255 : 0);
+            if (mask[i] != 0) on++;
         }
         lastL = lightness;
+        debugMaskPct = 100.0 * on / total;
+        // tuning aid: the colour the thresholds see (after white balance) in a 9x9 patch at the image centre
+        double sl = 0, sa = 0, sb = 0;
+        int n = 0;
+        for (int y = H / 2 - 4; y <= H / 2 + 4; y++) for (int x = W / 2 - 4; x <= W / 2 + 4; x++) {
+            int i = (y * W + x) * 3;
+            sl += all[i] & 255; sa += (all[i + 1] & 255) - 128; sb += (all[i + 2] & 255) - 128; n++;
+        }
+        sa /= n; sb /= n;
+        double hue = Math.toDegrees(Math.atan2(sb, sa));
+        if (hue < 0) hue += 360;
+        debugCenter = String.format(Locale.US, "L %.0f (min %d), hue %.0f (%d-%d), chroma %.0f (min %d)",
+                sl / n, minBright, hue, minHue, maxHue, Math.hypot(sa, sb), minChroma);
         return mask;
     }
 
@@ -3355,6 +3370,8 @@ public class Detect implements VisionProcessor, CameraStreamSource {
     public volatile int debugCircles = 0;
     public volatile int debugEstimated = 0;
     public volatile int debugKept = 0;
+    public static volatile double debugMaskPct = 0; // % of the image that passed the colour test, last frame
+    public static volatile String debugCenter = ""; // colour at the image centre, last frame, vs the thresholds
     public volatile String debugStages = "";
     public volatile String debugError = "";
 

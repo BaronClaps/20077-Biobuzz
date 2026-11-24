@@ -1059,9 +1059,9 @@ public class Detect implements VisionProcessor, CameraStreamSource {
 
     /** Sigma-1.5 blur of the inside mask over insideBox(10), shared by valleyNormals and climbValues (same value at every inside pixel). */
     static float[] bSoft;
-    static Box bSoftBox;
 
-    static float[] bValleyBlur, bClimbBlur;
+    static float[] bClimbBlur;
+    static float[][] bSlopes;
 
     /** Level values of the inside pixels over box b (0 elsewhere). */
     static float[] boxLevels(Box b, float[] level) {
@@ -1071,7 +1071,7 @@ public class Detect implements VisionProcessor, CameraStreamSource {
         return v;
     }
 
-    /** Also starts, in the same parallel batch as the mask blur, the level blurs valleyNormals and climbValues need. */
+    /** Also runs, inside its two parallel batches, the blurs and slopes that valleyNormals and climbValues read back. */
     static double[][] outlineNormals(boolean[] inside, byte[] insideBytes, float[] level) {
         Box b = insideBox(10);
         if (b == null) return new double[][]{new double[0], new double[0], new double[0], new double[0]};
@@ -1088,10 +1088,19 @@ public class Detect implements VisionProcessor, CameraStreamSource {
                 () -> blurs[1] = gaussOwn(vv, vb.bottom - vb.top, vb.right - vb.left, 1.5),
                 () -> blurs[2] = seedClimbBlurPx > 0 ? gaussOwn(cv, cb.bottom - cb.top, cb.right - cb.left, seedClimbBlurPx) : cv));
         final float[] soft = blurs[0];
-        bSoft = soft; bSoftBox = b; bValleyBlur = blurs[1]; bClimbBlur = blurs[2];
+        bSoft = soft; bClimbBlur = blurs[2];
+        final int vw = vb.right - vb.left, vh = vb.bottom - vb.top;
+        final float[] height = new float[vw * vh];
+        for (int k = 0; k < insideCount; k++) {
+            int g = insideIdx[k], y = g / W, x = g - y * W;
+            height[(y - vb.top) * vw + x - vb.left] = blurs[1][(y - vb.top) * vw + x - vb.left] / Math.max(soft[(y - b.top) * bw + x - b.left], 1e-6f);
+        }
+        final float[][] slopes = bSlopes = new float[2][];
         final float[][] grad = new float[2][];
         final byte[] er = new byte[bw * bh];
         runAll(Arrays.<Runnable>asList(
+                () -> slopes[0] = bSobelGaussOwn(height, vh, vw, 1, 0, 5, 2),
+                () -> slopes[1] = bSobelGaussOwn(height, vh, vw, 0, 1, 5, 2),
                 () -> grad[0] = sobelOwn(soft, bh, bw, 1, 0, 3),
                 () -> grad[1] = sobelOwn(soft, bh, bw, 0, 1, 3),
                 () -> {
@@ -1126,17 +1135,7 @@ public class Detect implements VisionProcessor, CameraStreamSource {
         Box b = insideBox(24);
         if (b == null) return new double[][]{new double[0], new double[0], new double[0], new double[0]};
         int bw = b.right - b.left, bh = b.bottom - b.top;
-        float[] blurred = bValleyBlur;
-        final float[] height = new float[bw * bh];
-        int sw = bSoftBox.right - bSoftBox.left;
-        for (int k = 0; k < insideCount; k++) {
-            int g = insideIdx[k], y = g / W, x = g - y * W;
-            int i = (y - b.top) * bw + x - b.left;
-            height[i] = blurred[i] / Math.max(bSoft[(y - bSoftBox.top) * sw + x - bSoftBox.left], 1e-6f);
-        }
-        final float[][] slopes = new float[2][];
-        runAll(Arrays.<Runnable>asList(() -> slopes[0] = bSobelGaussOwn(height, bh, bw, 1, 0, 5, 2), () -> slopes[1] = bSobelGaussOwn(height, bh, bw, 0, 1, 5, 2)));
-        float[] slopeX = slopes[0], slopeY = slopes[1];
+        float[] slopeX = bSlopes[0], slopeY = bSlopes[1];   // computed in outlineNormals' second batch
         int n = 0;
         for (int y = 0; y < bh; y++) { int g = (y + b.top) * W + b.left; for (int x = 0; x < bw; x++) if (valleys[g + x] && inside[g + x]) n++; }
         double[][] out = new double[4][n];

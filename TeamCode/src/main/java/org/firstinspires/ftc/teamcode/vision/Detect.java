@@ -1072,7 +1072,7 @@ public class Detect implements VisionProcessor, CameraStreamSource {
     }
 
     /** Also runs, inside its two parallel batches, the blurs and slopes that valleyNormals and climbValues read back. */
-    static double[][] outlineNormals(boolean[] inside, byte[] insideBytes, float[] level) {
+    static double[][] outlineNormals(byte[] insideBytes, float[] level) {
         Box b = insideBox(10);
         if (b == null) return new double[][]{new double[0], new double[0], new double[0], new double[0]};
         int bw = b.right - b.left, bh = b.bottom - b.top;
@@ -1132,7 +1132,7 @@ public class Detect implements VisionProcessor, CameraStreamSource {
         return out;
     }
 
-    static double[][] valleyNormals(boolean[] inside, byte[] insideBytes, float[] level, boolean[] valleys) {
+    static double[][] valleyNormals(boolean[] inside, boolean[] valleys) {
         Box b = insideBox(24);
         if (b == null) return new double[][]{new double[0], new double[0], new double[0], new double[0]};
         int bw = b.right - b.left, bh = b.bottom - b.top;
@@ -1259,7 +1259,7 @@ public class Detect implements VisionProcessor, CameraStreamSource {
             List<Float> weights = new ArrayList<>();
             sources.add(outline);
             weights.add(1f);
-            double[][] vn = valleyNormals(inside, insideBytes, level, valleys);
+            double[][] vn = valleyNormals(inside, valleys);
             stage("seeds: valley normals");
             double[][] neg = new double[][]{vn[0], vn[1], new double[vn[2].length], new double[vn[3].length]};
             for (int i = 0; i < vn[2].length; i++) { neg[2][i] = -vn[2][i]; neg[3][i] = -vn[3][i]; }
@@ -1375,7 +1375,7 @@ public class Detect implements VisionProcessor, CameraStreamSource {
         boolean any = false;
         for (boolean b : inside) if (b) { any = true; break; }
         if (!any) { spotX = new int[0]; spotY = new int[0]; seedExpected = null; return; }
-        double[][] outline = outlineNormals(inside, insideBytes, level);
+        double[][] outline = outlineNormals(insideBytes, level);
         stage("seeds: outline normals");
         Expect expected = ballSizeByRow(inside, insideBytes, level, valleys, outline);
         stage("seeds: ball size votes");
@@ -1439,7 +1439,7 @@ public class Detect implements VisionProcessor, CameraStreamSource {
         stage("seeds: coverage votes");
         List<double[]> kept = spacedPeaks(coverage, seedMinCoverPctg, null, rowRadius, insideImage, seedSpacingPctg, seedMinFillPctg);
         stage("seeds: spaced peaks");
-        float[] climb = climbValues(inside, insideBytes, level, bClimbSigma);
+        float[] climb = climbValues(bClimbSigma);
         stage("seeds: climb");
         Map<Integer, int[]> firstOnTop = new HashMap<>();
         int[] seedIdx = new int[kept.size()];
@@ -1457,7 +1457,7 @@ public class Detect implements VisionProcessor, CameraStreamSource {
         for (int k = 0; k < c; k++) { spotX[k] = seedIdx[k] % W; spotY[k] = seedIdx[k] / W; }
     }
 
-    static float[] climbValues(boolean[] inside, byte[] insideBytes, float[] level, double blur) {
+    static float[] climbValues(double blur) {
         if (bClimb.length != H * W) bClimb = new float[H * W];
         float[] result = bClimb;
         Arrays.fill(result, Float.NEGATIVE_INFINITY);

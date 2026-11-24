@@ -534,8 +534,10 @@ public class Detect implements VisionProcessor, CameraStreamSource {
         aLightBuf = aBuf(aLightBuf, total);
         byte[] all = aLabBuf, mask = aMaskBuf, lightness = aLightBuf, table = colorTable;
         int on = 0;
+        long sumL = 0;
         for (int i = 0; i < total; i++) {
             int l = all[i * 3] & 255, a = all[i * 3 + 1] & 255, b = all[i * 3 + 2] & 255;
+            sumL += l;
             lightness[i] = all[i * 3];
             mask[i] = (byte) (table[a * 256 + b] != 0 && l >= minBright && l <= maxBright ? 255 : 0);
             if (mask[i] != 0) on++;
@@ -552,8 +554,8 @@ public class Detect implements VisionProcessor, CameraStreamSource {
         sa /= n; sb /= n;
         double hue = Math.toDegrees(Math.atan2(sb, sa));
         if (hue < 0) hue += 360;
-        debugCenter = String.format(Locale.US, "L %.0f (min %d), hue %.0f (%d-%d), chroma %.0f (min %d)",
-                sl / n, minBright, hue, minHue, maxHue, Math.hypot(sa, sb), minChroma);
+        debugCenter = String.format(Locale.US, "L %.0f (min %d), hue %.0f (%d-%d), chroma %.0f (min %d); whole image L %.0f",
+                sl / n, minBright, hue, minHue, maxHue, Math.hypot(sa, sb), minChroma, (double) sumL / total);
         return mask;
     }
 
@@ -3521,7 +3523,6 @@ public class Detect implements VisionProcessor, CameraStreamSource {
             frameW = frame.cols();
             frameH = frame.rows();
             latest = new Frame(latest.id + 1, Collections.unmodifiableList(balls));
-            if (frameEpoch == epoch) fresh = latest;
             debugProcessMs = (System.nanoTime() - startTime) / 1e6;
             debugSingles = accepted.size();
             debugSeeds = spotX.length;
@@ -3535,6 +3536,7 @@ public class Detect implements VisionProcessor, CameraStreamSource {
                 stages.append(entry.getKey()).append(" ").append(String.format(Locale.US, "%.1f", entry.getValue() / 1e6));
             }
             debugStages = stages.toString();
+            if (frameEpoch == epoch) fresh = latest; // last: a reader that sees this frame also sees its debug fields
 
             boolean publish = fFrameCount == 0;
             fFrameCount = (fFrameCount + 1) % Math.max(1, STREAM_EVERY);

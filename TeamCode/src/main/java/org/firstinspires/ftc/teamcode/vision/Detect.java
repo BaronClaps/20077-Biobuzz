@@ -94,7 +94,7 @@ public class Detect implements VisionProcessor, CameraStreamSource {
         Box(int top, int bottom, int left, int right, int label) { this.top = top; this.bottom = bottom; this.left = left; this.right = right; this.label = label; }
     }
 
-    static final class Found { double x, y, r, expected = -1; double[] position, raw; boolean kept = true, estimated; }
+    static final class Found { double x, y, r, expected = -1; double[] position, raw; boolean kept = true, estimated; int parts = 1; }
 
     static final class Fit {
         double cx, cy, r, score, mx, my;
@@ -2742,6 +2742,78 @@ public class Detect implements VisionProcessor, CameraStreamSource {
         return low;
     }
 
+    /** Floor position and the radius a ball should have at (b.x, b.y). */
+    static void place(Found b, double[] origin, double focal) {
+        double[] p = floorPoint(b.x, b.y, ballRadiusCm);
+        b.raw = p;
+        b.position = null;
+        b.expected = -1;
+        if (p == null) return;
+        double rx = p[0], ry = p[1];
+        if (origin != null) { rx -= origin[0]; ry -= origin[1]; }
+        b.position = new double[]{rx, ry};
+        if (p[2] > 1e-6) b.expected = focal * ballRadiusCm / 2 * (1 / p[2] + p[3] / (p[2] * p[2]));
+    }
+
+    /**
+     * A far ball whose mask breaks up (shaded side, holes) gives several small circles close together. Circles whose centres are
+     * nearer than one expected ball radius cannot be two balls (two touching balls are 2 radii apart), so each such group becomes
+     * one circle enclosing them all; the size filter then judges it like any other.
+     */
+    static List<Found> mergeFragments(List<Found> balls, double[] origin, double focal) {
+        int n = balls.size();
+        int[] group = new int[n];
+        for (int i = 0; i < n; i++) group[i] = i;
+        boolean any = false;
+        for (int i = 0; i < n; i++) for (int j = i + 1; j < n; j++) {
+            Found a = balls.get(i), b = balls.get(j);
+            double reach = Math.max(a.expected, b.expected);
+            if (reach > 0 && Math.hypot(a.x - b.x, a.y - b.y) < reach) {
+                int ga = root(group, i), gb = root(group, j);
+                if (ga != gb) { group[gb] = ga; any = true; }
+            }
+        }
+        if (!any) return balls;
+        Map<Integer, List<Found>> groups = new LinkedHashMap<>();
+        for (int i = 0; i < n; i++) groups.computeIfAbsent(root(group, i), k -> new ArrayList<>()).add(balls.get(i));
+        List<Found> out = new ArrayList<>();
+        for (List<Found> g : groups.values()) {
+            if (g.size() == 1) { out.add(g.get(0)); continue; }
+            double sw = 0, sx = 0, sy = 0;
+            for (Found f : g) { double w = f.r * f.r; sw += w; sx += w * f.x; sy += w * f.y; }
+            Found m = new Found();
+            m.x = sx / sw;
+            m.y = sy / sw;
+            for (Found f : g) m.r = Math.max(m.r, Math.hypot(f.x - m.x, f.y - m.y) + f.r);
+            m.estimated = true;
+            for (Found f : g) m.estimated &= f.estimated;
+            m.parts = g.size();
+            // only a ball the mask actually fills: separate junk circles must not add up to one ball-sized circle
+            if (fillOf(pFilled, m.x, m.y, m.r) < circleMinFillPctg) { out.addAll(g); continue; }
+            place(m, origin, focal);
+            out.add(m);
+        }
+        return out;
+    }
+
+    /** Fraction of the circle's pixels (inside the image) that are set in mask. */
+    static double fillOf(byte[] mask, double cx, double cy, double r) {
+        int x0 = (int) Math.max(0, Math.floor(cx - r)), x1 = (int) Math.min(W - 1, Math.ceil(cx + r));
+        int y0 = (int) Math.max(0, Math.floor(cy - r)), y1 = (int) Math.min(H - 1, Math.ceil(cy + r));
+        int in = 0, on = 0;
+        for (int y = y0; y <= y1; y++) for (int x = x0; x <= x1; x++) {
+            if ((x - cx) * (x - cx) + (y - cy) * (y - cy) > r * r) continue;
+            in++;
+            if (mask[y * W + x] != 0) on++;
+        }
+        return in == 0 ? 0 : (double) on / in;
+    }
+
+    static int root(int[] group, int i) {
+        while (group[i] != i) i = group[i] = group[group[i]];
+        return i;
+    }
+
     static List<Found> locateBalls(List<Fit> fits, List<Found> estimated) {
         int cutoff = fieldCutoffRow();
         List<Found> balls = new ArrayList<>();
@@ -2750,24 +2822,15 @@ public class Detect implements VisionProcessor, CameraStreamSource {
         balls.addAll(estimated);
         double[] origin = floorPoint((W - 1) / 2.0, H - 1, 0);
         double focal = (calMatrix.get(0, 0)[0] + calMatrix.get(1, 1)[0]) / 2;
+        for (Found b : balls) place(b, origin, focal);
+        balls = mergeFragments(balls, origin, focal);
         StringBuilder found = new StringBuilder();
         for (Found b : balls) {
-            double[] p = floorPoint(b.x, b.y, ballRadiusCm);
-            b.raw = p;
-            if (p != null) {
-                double rx = p[0], ry = p[1];
-                if (origin != null) { rx -= origin[0]; ry -= origin[1]; }
-                b.position = new double[]{rx, ry};
-                if (p[2] > 1e-6) {
-                    double e = focal * ballRadiusCm / 2 * (1 / p[2] + p[3] / (p[2] * p[2]));
-                    b.expected = e;
-                    b.kept = Math.abs(b.r * b.r - e * e) <= sizeFilterPctg * e * e;
-                }
-            }
+            if (b.expected > 0) b.kept = Math.abs(b.r * b.r - b.expected * b.expected) <= sizeFilterPctg * b.expected * b.expected;
             String why = !b.kept ? "size" : b.r < ballMinRadiusPx || b.r > ballMaxRadiusPx ? "radius limits" : b.y < cutoff ? "above row " + cutoff : "";
             b.kept = b.kept && ballMinRadiusPx <= b.r && b.r <= ballMaxRadiusPx;
             if (b.y < cutoff) b.kept = false;
-            found.append(String.format(Locale.US, "\n (%.0f, %.0f) r %.0f, expected r %s%s", b.x, b.y, b.r,
+            found.append(String.format(Locale.US, "\n (%.0f, %.0f) r %.0f%s, expected r %s%s", b.x, b.y, b.r, b.parts > 1 ? " (" + b.parts + " pieces merged)" : "",
                     b.expected < 0 ? "none (above horizon)" : String.format(Locale.US, "%.0f", b.expected), why.isEmpty() ? "" : ", DROPPED: " + why));
         }
         debugFound = found.toString();

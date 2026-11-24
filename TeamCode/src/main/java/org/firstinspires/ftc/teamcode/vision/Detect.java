@@ -15,6 +15,7 @@ import org.firstinspires.ftc.robotcore.external.hardware.camera.controls.GainCon
 import org.firstinspires.ftc.robotcore.external.hardware.camera.controls.WhiteBalanceControl;
 import org.firstinspires.ftc.vision.VisionPortal;
 import org.firstinspires.ftc.robotcore.external.function.Continuation;
+import org.firstinspires.ftc.robotcore.external.stream.CameraStreamServer;
 import org.firstinspires.ftc.robotcore.external.stream.CameraStreamSource;
 import org.firstinspires.ftc.robotcore.internal.camera.calibration.CameraCalibration;
 import org.firstinspires.ftc.vision.VisionProcessor;
@@ -32,7 +33,7 @@ public class Detect implements VisionProcessor, CameraStreamSource {
 
     // true only for a camera mounted on its side (the phone videos); a Logitech webcam streams landscape
     public static boolean PORTRAIT = false;
-    public static int WORK_WIDTH = 650;
+    public static int WORK_WIDTH = 480; // 640x480 frames are shrunk to this: ~2x faster, same balls on the bench frames (320 lost some)
     public static int THREADS = 4;
     // raise to 3-5 during matches to save CPU; 1 = every frame
     public static int STREAM_EVERY = 5;
@@ -570,6 +571,26 @@ public class Detect implements VisionProcessor, CameraStreamSource {
         return mask;
     }
 
+    static Mat aSpIn, aSpLabels = new Mat(), aSpStats = new Mat(), aSpCent = new Mat();
+    static int[] aSpLab = new int[0];
+
+    /** Erases mask pieces smaller than regionMinPx (carpet speckle) so later stages never see them. */
+    static void dropSpecks(byte[] mask) {
+        aSpIn = aMat(aSpIn, H, W, CvType.CV_8UC1);
+        aSpIn.put(0, 0, mask);
+        long s = tic();
+        int n = Imgproc.connectedComponentsWithStats(aSpIn, aSpLabels, aSpStats, aSpCent, 8, CvType.CV_32S);
+        toc(s);
+        int[] st = getInts(aSpStats);
+        boolean[] drop = new boolean[n];
+        boolean any = false;
+        for (int l = 1; l < n; l++) if (st[l * 5 + Imgproc.CC_STAT_AREA] < regionMinPx) { drop[l] = true; any = true; }
+        if (!any) return;
+        aSpLab = aGrowI(aSpLab, H * W);
+        aSpLabels.get(0, 0, aSpLab);
+        for (int i = 0; i < H * W; i++) if (mask[i] != 0 && drop[aSpLab[i]]) mask[i] = 0;
+    }
+
     static byte[] fillHoles(byte[] mask) {
         int total = H * W;
         aMkIn = aMat(aMkIn, H, W, CvType.CV_8UC1);
@@ -595,7 +616,10 @@ public class Detect implements VisionProcessor, CameraStreamSource {
                 aMkFilled = aMat(aMkFilled, H, W, CvType.CV_8UC1);
                 aMkIn.copyTo(aMkFilled);
                 s = tic();
-                for (int i = 0; i < contours.size(); i++) if (small[i]) Imgproc.drawContours(aMkFilled, contours, i, new Scalar(255), -1);
+                // one call: drawContours converts the whole list to native on every call, so per-hole calls were O(n^2) on carpet speckle
+                List<MatOfPoint> holes = new ArrayList<>();
+                for (int i = 0; i < contours.size(); i++) if (small[i]) holes.add(contours.get(i));
+                Imgproc.drawContours(aMkFilled, holes, -1, new Scalar(255), -1);
                 toc(s);
                 aGetBytesInto(aMkFilled, out);
             }
@@ -2850,6 +2874,7 @@ public class Detect implements VisionProcessor, CameraStreamSource {
         Mat image = whiteBalance(raw);
         pImage = image;
         byte[] mask = yellowMask(image);
+        dropSpecks(mask);
         byte[] filled = fillHoles(mask);
         pMask = mask;
         pFilled = filled;
@@ -3416,14 +3441,17 @@ public class Detect implements VisionProcessor, CameraStreamSource {
     private final Mat fView = new Mat(), fRgbPanel = new Mat();
     private Bitmap fBitmapA, fBitmapB;
     private boolean fUseB;
-    private int fFrameCount;
+    private int fFrameCount, fPublishedEpoch = -1;
+    private boolean fStreamSource;
+    private List<Found> fFound = Collections.emptyList();
+    private double fInverseScale = 1;
 
     /** Opens the webcam (webcamName, frameWidth x frameHeight) with this as its only processor, enabled. */
     public Detect(HardwareMap hardwareMap) {
         portal = new VisionPortal.Builder()
                 .setCamera(hardwareMap.get(WebcamName.class, webcamName))
                 .setCameraResolution(new android.util.Size(frameWidth, frameHeight))
-                .enableLiveView(true)
+                .enableLiveView(false) // the Driver Station stream comes from this processor (with circles); the RC preview only cost CPU
                 .addProcessor(this)
                 .build();
     }
@@ -3532,6 +3560,8 @@ public class Detect implements VisionProcessor, CameraStreamSource {
             List<Found> found = run(fBgr);
 
             double inverseScale = 1.0 / scale;
+            fFound = found;
+            fInverseScale = inverseScale;
             List<Ball> balls = new ArrayList<>();
             for (Found f : found) {
                 if (!f.kept) continue;
@@ -3556,9 +3586,16 @@ public class Detect implements VisionProcessor, CameraStreamSource {
             debugStages = stages.toString();
             if (frameEpoch == epoch) fresh = latest; // last: a reader that sees this frame also sees its debug fields
 
-            boolean publish = fFrameCount == 0;
+            boolean publish = fFrameCount == 0 || frameEpoch != fPublishedEpoch; // the first frame of every scan always shows
+            fPublishedEpoch = frameEpoch;
             fFrameCount = (fFrameCount + 1) % Math.max(1, STREAM_EVERY);
             if (publish) publishView(mode, frame, fBgr);
+            if (!fStreamSource) {
+                // Driver Station "Camera Stream" shows this processor's last view (with circles), held while disabled.
+                // Set here, not at build: the portal registers its raw feed when the camera starts streaming.
+                CameraStreamServer.getInstance().setSource(this);
+                fStreamSource = true;
+            }
             debugError = "";
         } catch (RuntimeException error) {
             latest = new Frame(latest.id, Collections.<Ball>emptyList());
@@ -3573,6 +3610,13 @@ public class Detect implements VisionProcessor, CameraStreamSource {
         Mat view = fView;
         if (mode <= 0) {
             frame.copyTo(view);
+            // every circle found: green = kept ball, red = dropped (size, radius limits or too far)
+            for (Found f : fFound) {
+                Point c = new Point(f.x * fInverseScale, f.y * fInverseScale);
+                Scalar color = f.kept ? new Scalar(0, 255, 0) : new Scalar(255, 0, 0); // view is RGB
+                Imgproc.circle(view, c, (int) Math.round(f.r * fInverseScale), color, 2);
+                Imgproc.circle(view, c, 3, color, -1);
+            }
         } else {
             Mat panel = buildPanel(mode);
             Mat rgbPanel = fRgbPanel;

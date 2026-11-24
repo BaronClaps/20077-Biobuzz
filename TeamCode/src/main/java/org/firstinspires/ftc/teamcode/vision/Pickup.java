@@ -63,7 +63,7 @@ public class Pickup {
     public static int scanFrames = 1; // frames voted on per scan; try 3 if one-frame glare or missed balls show up
     public static double scanMinSeen = 0.5; // a ball must be in at least this fraction of them
     public static double scanMatchRadius = 2; // in: same ball across frames if within this
-    public static double scanTimeoutMs = 1500; // plan with the frames seen so far after this
+    public static double scanTimeoutMs = 2500; // plan with the frames seen so far after this; keep about 2x the Vision Test frame time
     public static double finishWaitMs = 1000; // max wait for the follower to stop after a pass
     public static double passTimeoutMs = 15000;
     public static int maxPasses = 5;

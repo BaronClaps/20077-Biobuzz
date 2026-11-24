@@ -49,19 +49,20 @@ public class VisionTest extends LinearOpMode {
         long t0 = System.nanoTime();
         detect.enable();
         Detect.Frame frame = null;
-        while (frame == null && !isStopRequested() && ms(t0) < Pickup.scanTimeoutMs) {
+        while (frame == null && !isStopRequested() && ms(t0) < 5000) {
             follower.update();
             frame = detect.capture();
         }
         detect.disable();
         double waitMs = ms(t0);
         if (frame == null) {
-            report.add(String.format(Locale.US, "NO FRAME after %.0f ms (camera not streaming, or processing > scanTimeoutMs)", waitMs));
+            report.add(String.format(Locale.US, "NO FRAME after %.0f ms (camera not streaming, or a frame takes > 5 s)", waitMs));
             if (!detect.debugError.isEmpty()) report.add("Error: " + detect.debugError);
             return;
         }
         Pose pose = follower.pose();
         report.add(String.format(Locale.US, "Detect: %.0f ms processing, %.0f ms enable -> frame", detect.debugProcessMs, waitMs));
+        if (waitMs > Pickup.scanTimeoutMs) report.add(String.format(Locale.US, "SLOW: the auto would time out (Pickup.scanTimeoutMs = %.0f)", Pickup.scanTimeoutMs));
         report.add("Stages (ms): " + detect.debugStages);
         report.add(String.format(Locale.US, "Counts: singles %d, seeds %d, circles %d, estimated %d, kept %d",
                 detect.debugSingles, detect.debugSeeds, detect.debugCircles, detect.debugEstimated, detect.debugKept));

@@ -2561,20 +2561,17 @@ public class Detect implements VisionProcessor, CameraStreamSource {
         return false;
     }
 
-    static byte[] dRemRem = new byte[0], dRemOut = new byte[0], dRemOpened = new byte[0];
+    static byte[] dRemOpened = new byte[0];
     static int[] dRemLab = new int[0];
     static float[] dRemThick = new float[0];
 
     static List<Found> remainingBalls(byte[] filled, List<double[]> circles, Expect expected) {
         List<Found> estimated = new ArrayList<>();
-        if (dRemRem.length != H * W) { dRemRem = new byte[H * W]; dRemOut = new byte[H * W]; dRemOpened = new byte[H * W]; dRemLab = new int[H * W]; dRemThick = new float[H * W]; }
-        byte[] rem = dRemRem;
-        for (int i = 0; i < H * W; i++) rem[i] = (byte) (filled[i] != 0 ? 1 : 0);
-        Mat remaining = bytesMat(rem, H, W);
+        if (dRemOpened.length != H * W) { dRemOpened = new byte[H * W]; dRemLab = new int[H * W]; dRemThick = new float[H * W]; }
+        Mat remaining = bytesMat(filled, H, W);
         long s = tic();
         for (double[] c : circles) Imgproc.circle(remaining, new Point(Math.rint(c[0]), Math.rint(c[1])), (int) Math.rint(c[2]), new Scalar(0), -1);
         toc(s);
-        remaining.get(0, 0, dRemOut);
         if (expected == null) return estimated;
         Mat labels = tmp(), stats = tmp(), cents = tmp();
         s = tic();
@@ -2659,7 +2656,7 @@ public class Detect implements VisionProcessor, CameraStreamSource {
             for (int i = 0; i < n; i++) {
                 int best = 0;
                 double bd = Double.MAX_VALUE;
-                for (int c = 0; c < count; c++) { double d = dist(px[i] - cx[c], py[i] - cy[c]); if (d < bd) { bd = d; best = c; } }
+                for (int c = 0; c < count; c++) { double dx = px[i] - cx[c], dy = py[i] - cy[c], d = dx * dx + dy * dy; if (d < bd) { bd = d; best = c; } }
                 sx[best] += px[i]; sy[best] += py[i]; sn[best]++;
             }
             boolean close = true;

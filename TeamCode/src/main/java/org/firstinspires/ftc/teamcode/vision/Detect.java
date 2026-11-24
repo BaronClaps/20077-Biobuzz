@@ -47,8 +47,8 @@ public class Detect implements VisionProcessor, CameraStreamSource {
     public static int whiteBalanceK = 0, exposureMs = 0, gain = 0;
     // ---- camera mount, relative to the robot centre (inches, degrees). The only copy: Pickup/Impose read these too ----
     public static double camForwardIn = 0, camLeftIn = 0; // PLACEHOLDER: measure on robot
-    public static double camHeightIn = 4; // measured: lens height above the floor
-    public static double camPitchDownDeg = 15, camYawLeftDeg = 0; // pitch measured; yaw 0 = straight ahead
+    public static double camHeightIn = 4.5; // lens height above the floor: measured 4, fitted 4.5 from 3 ball sizes
+    public static double camPitchDownDeg = 19, camYawLeftDeg = 0; // measured 15, fitted 19 from 3 ball sizes; yaw 0 = straight ahead
 
     public static int tileR = 128, tileG = 128, tileB = 128; // equal = no white-balance correction (C270 colours are already neutral)
     public static int minHue = 70, maxHue = 118, minChroma = 20, minBright = 61, maxBright = 255; // C270 + beige carpet: carpet sits at chroma 10-15, ball 20-35

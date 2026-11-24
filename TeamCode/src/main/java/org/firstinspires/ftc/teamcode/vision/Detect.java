@@ -2756,11 +2756,27 @@ public class Detect implements VisionProcessor, CameraStreamSource {
     }
 
     /**
-     * A far ball whose mask breaks up (shaded side, holes) gives several small circles close together. Circles whose centres are
-     * nearer than one expected ball radius cannot be two balls (two touching balls are 2 radii apart), so each such group becomes
-     * one circle enclosing them all; the size filter then judges it like any other.
+     * A ball whose mask breaks up (shaded side, holes, the seam between touching balls) gives small circles beside or inside it.
+     * Only pieces (circles too small for their spot) are touched; a full-size circle is never merged:
+     * - a piece overlapping a full-size circle is part of that ball (inside it, or on its outline) and is removed;
+     * - the other pieces nearer each other than one expected ball radius (two touching balls are 2 radii apart) become one
+     *   circle enclosing them, if the mask fills it; the size filter then judges it like any other.
      */
-    static List<Found> mergeFragments(List<Found> balls, double[] origin, double focal) {
+    static List<Found> mergeFragments(List<Found> all, double[] origin, double focal) {
+        double small = Math.sqrt(Math.max(0, 1 - sizeFilterPctg)); // below this fraction of the expected radius the size filter drops it
+        List<Found> balls = new ArrayList<>(), whole = new ArrayList<>();
+        for (Found f : all) (f.expected > 0 && f.r < small * f.expected ? balls : whole).add(f);
+        for (Iterator<Found> it = balls.iterator(); it.hasNext(); ) {
+            Found f = it.next();
+            // overlapping it, not just inside: pieces also sit on a ball's outline (shaded edge)
+            for (Found w : whole) if (Math.hypot(f.x - w.x, f.y - w.y) < w.r + f.r) { it.remove(); break; }
+        }
+        List<Found> merged = mergePieces(balls, origin, focal);
+        merged.addAll(0, whole);
+        return merged;
+    }
+
+    static List<Found> mergePieces(List<Found> balls, double[] origin, double focal) {
         int n = balls.size();
         int[] group = new int[n];
         for (int i = 0; i < n; i++) group[i] = i;

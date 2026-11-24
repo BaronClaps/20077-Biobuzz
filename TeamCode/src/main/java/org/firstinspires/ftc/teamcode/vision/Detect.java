@@ -1083,6 +1083,7 @@ public class Detect implements VisionProcessor, CameraStreamSource {
         final float[] vv = boxLevels(vb, level), cv = boxLevels(cb, level);
         final float[][] blurs = new float[3][];
         runAll(Arrays.<Runnable>asList(
+                () -> bMaxDist5 = maxDistance(insideBytes, 5),
                 () -> blurs[0] = gauss(f, bh, bw, 1.5),
                 () -> blurs[1] = gaussOwn(vv, vb.bottom - vb.top, vb.right - vb.left, 1.5),
                 () -> blurs[2] = seedClimbBlurPx > 0 ? gaussOwn(cv, cb.bottom - cb.top, cb.right - cb.left, seedClimbBlurPx) : cv));
@@ -1151,16 +1152,18 @@ public class Detect implements VisionProcessor, CameraStreamSource {
         return out;
     }
 
+    static float bMaxDist5;
+
+    /** Thread-safe (own scratch Mats); outlineNormals runs it in its parallel batch and callers read bMaxDist5. */
     static float maxDistance(byte[] insideBytes, int maskSize) {
         // crop to the inside box + 2 zero rows/cols: the 5x5 mask never reads further, so the max is unchanged
         Box b = insideBox(2);
         if (b == null) return 0f;
-        Mat m = bytesMat(crop(insideBytes, b, 1), b.bottom - b.top, b.right - b.left), d = tmp();
-        long s = tic();
-        Imgproc.distanceTransform(m, d, Imgproc.DIST_L2, maskSize);
-        double max = Core.minMaxLoc(d).maxVal;
-        toc(s);
-        return (float) max;
+        BScratch s = bScratch.get();
+        s.a.create(b.bottom - b.top, b.right - b.left, CvType.CV_8UC1);
+        s.a.put(0, 0, crop(insideBytes, b, 1));
+        Imgproc.distanceTransform(s.a, s.b, Imgproc.DIST_L2, maskSize);
+        return (float) Core.minMaxLoc(s.b).maxVal;
     }
 
     static List<double[]> spacedPeaks(float[] coverage, double minimum, float[] radiusMap, double[] rowRadius, byte[] insideImage, double spacing, double minFill) {
@@ -1264,7 +1267,7 @@ public class Detect implements VisionProcessor, CameraStreamSource {
             weights.add((float) sizeVoteValleyWeight);
             sources.add(neg);
             weights.add((float) sizeVoteValleyWeight);
-            double largest = Math.max(maxDistance(insideBytes, 5) * 1.3, sizeVoteSmallestPx + 1);
+            double largest = Math.max(bMaxDist5 * 1.3, sizeVoteSmallestPx + 1);
             int margin = (int) Math.ceil(largest) + (int) Math.rint(4 * Math.max(0.15 * largest, 1.0)) + 3;
             List<Double> trial = new ArrayList<>();
             for (double r = sizeVoteSmallestPx; r <= largest; r *= 1 + sizeVoteStepPctg) trial.add(r);
@@ -1378,7 +1381,7 @@ public class Detect implements VisionProcessor, CameraStreamSource {
         stage("seeds: ball size votes");
         seedExpected = expected;
         double[] rowRadius = new double[H];
-        if (expected == null) { double fixed = Math.max(maxDistance(insideBytes, 5), 2.0); Arrays.fill(rowRadius, fixed); }
+        if (expected == null) { double fixed = Math.max(bMaxDist5, 2.0); Arrays.fill(rowRadius, fixed); }
         else for (int y = 0; y < H; y++) rowRadius[y] = expected.at(y);
         int n = outline[0].length;
         double sigma = 1.0, maxR = 0;

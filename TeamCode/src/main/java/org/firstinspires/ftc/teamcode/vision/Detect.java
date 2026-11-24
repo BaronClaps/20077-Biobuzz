@@ -49,7 +49,7 @@ public class Detect implements VisionProcessor, CameraStreamSource {
     public static double camHeightIn = 4; // PLACEHOLDER: measure on robot
     public static double camPitchDownDeg = 0, camYawLeftDeg = 0; // PLACEHOLDER: measure on robot (0 = straight ahead)
 
-    public static int tileR = 116, tileG = 115, tileB = 100;
+    public static int tileR = 128, tileG = 128, tileB = 128; // equal = no white-balance correction (C270 colours are already neutral)
     public static int minHue = 70, maxHue = 118, minChroma = 40, minBright = 61, maxBright = 255;
     public static int holeFillMaxPx = 24;
     public static int blemishMaxPx = 12, blemishDarkness = 15, smoothSize = 15;
@@ -64,7 +64,7 @@ public class Detect implements VisionProcessor, CameraStreamSource {
     public static double seedVoteBlurPctg = 0.2, seedMinCoverPctg = 0.03, seedSpacingPctg = 0.5, seedMinFillPctg = 0.4, seedClimbBlurPx = 1.5, seedSameSpotReachPctg = 0.7;
     public static double ballRadiusCm = 3.55;
     static final double CM = 2.54; // cm per inch
-    public static double sizeFilterPctg = 0.5, ballMinRadiusPx = 2.0, ballMaxRadiusPx = 60.0, fieldMaxDistanceCm = 450;
+    public static double sizeFilterPctg = 0.5, ballMinRadiusPx = 2.0, ballMaxRadiusPx = 120.0, fieldMaxDistanceCm = 450;
     public static double remainingOpenPctg = 0.25, remainingMinBallPctg = 0.4, remainingBallAreaPctg = 1.0, remainingMinRadiusPx = 2.5;
     public static int regionMinPx = 15;
     public static double seamWeight = 0.3;
@@ -505,6 +505,8 @@ public class Detect implements VisionProcessor, CameraStreamSource {
 
     static byte[] colorTable;
 
+    static byte[] chromaTable = new byte[65536]; // tuning aid: chroma (capped 255) when the hue is in range, else 0
+
     static byte[] makeColorTable() {
         byte[] t = new byte[65536];
         for (int a = 0; a < 256; a++) for (int b = 0; b < 256; b++) {
@@ -514,6 +516,7 @@ public class Detect implements VisionProcessor, CameraStreamSource {
             if (hue < 0) hue += 360f;
             float chroma = (float) dist(fa, fb);
             t[a * 256 + b] = (byte) (hue >= minHue && hue <= maxHue && chroma >= minChroma ? 255 : 0);
+            chromaTable[a * 256 + b] = (byte) (hue >= minHue && hue <= maxHue ? Math.min(255, Math.round(chroma)) : 0);
         }
         return t;
     }
@@ -535,13 +538,21 @@ public class Detect implements VisionProcessor, CameraStreamSource {
         byte[] all = aLabBuf, mask = aMaskBuf, lightness = aLightBuf, table = colorTable;
         int on = 0;
         long sumL = 0;
+        int[] hist = new int[256];
         for (int i = 0; i < total; i++) {
             int l = all[i * 3] & 255, a = all[i * 3 + 1] & 255, b = all[i * 3 + 2] & 255;
             sumL += l;
             lightness[i] = all[i * 3];
             mask[i] = (byte) (table[a * 256 + b] != 0 && l >= minBright && l <= maxBright ? 255 : 0);
             if (mask[i] != 0) on++;
+            if (l >= minBright && l <= maxBright) hist[chromaTable[a * 256 + b] & 255]++;
         }
+        StringBuilder h = new StringBuilder();
+        for (int c = 40, sum = 0; c >= 10; c -= 5) {
+            for (int k = c; k < (c == 40 ? 256 : c + 5); k++) sum += hist[k];
+            h.insert(0, String.format(Locale.US, " >=%d: %.1f%%", c, 100.0 * sum / total));
+        }
+        debugChroma = h.toString().trim();
         lastL = lightness;
         debugMaskPct = 100.0 * on / total;
         // tuning aid: the colour the thresholds see (after white balance) in a 9x9 patch at the image centre
@@ -3373,6 +3384,7 @@ public class Detect implements VisionProcessor, CameraStreamSource {
     public volatile int debugEstimated = 0;
     public volatile int debugKept = 0;
     public static volatile double debugMaskPct = 0; // % of the image that passed the colour test, last frame
+    public static volatile String debugChroma = ""; // % of image with yellow hue and OK brightness, per chroma floor
     public static volatile String debugCenter = ""; // colour at the image centre, last frame, vs the thresholds
     public volatile String debugStages = "";
     public volatile String debugError = "";

@@ -46,7 +46,7 @@ public class Detect implements VisionProcessor, CameraStreamSource {
     public static int whiteBalanceK = 0, exposureMs = 0, gain = 0;
     // ---- camera mount, relative to the robot centre (inches, degrees). The only copy: Pickup/Impose read these too ----
     public static double camForwardIn = 0, camLeftIn = 0; // PLACEHOLDER: measure on robot
-    public static double camHeightIn = 11.7; // PLACEHOLDER: measure on robot
+    public static double camHeightIn = 4; // PLACEHOLDER: measure on robot
     public static double camPitchDownDeg = 0, camYawLeftDeg = 0; // PLACEHOLDER: measure on robot (0 = straight ahead)
 
     public static int tileR = 116, tileG = 115, tileB = 100;
@@ -3386,6 +3386,7 @@ public class Detect implements VisionProcessor, CameraStreamSource {
         portal = new VisionPortal.Builder()
                 .setCamera(hardwareMap.get(WebcamName.class, webcamName))
                 .setCameraResolution(new android.util.Size(frameWidth, frameHeight))
+                .enableLiveView(true)
                 .addProcessor(this)
                 .build();
     }

@@ -466,6 +466,7 @@ public class Detect implements VisionProcessor, CameraStreamSource {
     static int aLutR = -1, aLutG = -1, aLutB = -1;
 
     static Mat whiteBalance(Mat image) {
+        if (tileR == tileG && tileG == tileB) return image; // scale is exactly 1.0: identity
         if (aLutScaled == null || aLutR != tileR || aLutG != tileG || aLutB != tileB) {
             double target = (tileR + tileG + tileB) / 3.0;
             Mat lut = new Mat(1, 256, CvType.CV_8UC3);

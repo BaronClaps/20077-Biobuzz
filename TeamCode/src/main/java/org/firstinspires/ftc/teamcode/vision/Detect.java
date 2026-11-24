@@ -1061,15 +1061,33 @@ public class Detect implements VisionProcessor, CameraStreamSource {
     static float[] bSoft;
     static Box bSoftBox;
 
-    static double[][] outlineNormals(boolean[] inside, byte[] insideBytes) {
+    static float[] bValleyBlur, bClimbBlur;
+
+    /** Level values of the inside pixels over box b (0 elsewhere). */
+    static float[] boxLevels(Box b, float[] level) {
+        int bw = b.right - b.left;
+        float[] v = new float[bw * (b.bottom - b.top)];
+        for (int k = 0; k < insideCount; k++) { int g = insideIdx[k]; v[(g / W - b.top) * bw + g % W - b.left] = level[g]; }
+        return v;
+    }
+
+    /** Also starts, in the same parallel batch as the mask blur, the level blurs valleyNormals and climbValues need. */
+    static double[][] outlineNormals(boolean[] inside, byte[] insideBytes, float[] level) {
         Box b = insideBox(10);
         if (b == null) return new double[][]{new double[0], new double[0], new double[0], new double[0]};
         int bw = b.right - b.left, bh = b.bottom - b.top;
         float[] f = new float[bw * bh];
         byte[] ib = new byte[bw * bh];
-        for (int y = 0; y < bh; y++) for (int x = 0; x < bw; x++) if (inside[(y + b.top) * W + x + b.left]) { f[y * bw + x] = 1f; ib[y * bw + x] = 1; }
-        final float[] soft = gauss(f, bh, bw, 1.5);
-        bSoft = soft; bSoftBox = b;
+        for (int k = 0; k < insideCount; k++) { int g = insideIdx[k], i = (g / W - b.top) * bw + g % W - b.left; f[i] = 1f; ib[i] = 1; }
+        final Box vb = insideBox(24), cb = insideBox((int) Math.rint(4 * Math.max(seedClimbBlurPx, 0)) + 4);
+        final float[] vv = boxLevels(vb, level), cv = boxLevels(cb, level);
+        final float[][] blurs = new float[3][];
+        runAll(Arrays.<Runnable>asList(
+                () -> blurs[0] = gauss(f, bh, bw, 1.5),
+                () -> blurs[1] = gaussOwn(vv, vb.bottom - vb.top, vb.right - vb.left, 1.5),
+                () -> blurs[2] = seedClimbBlurPx > 0 ? gaussOwn(cv, cb.bottom - cb.top, cb.right - cb.left, seedClimbBlurPx) : cv));
+        final float[] soft = blurs[0];
+        bSoft = soft; bSoftBox = b; bValleyBlur = blurs[1]; bClimbBlur = blurs[2];
         final float[][] grad = new float[2][];
         final byte[] er = new byte[bw * bh];
         runAll(Arrays.<Runnable>asList(
@@ -1107,9 +1125,7 @@ public class Detect implements VisionProcessor, CameraStreamSource {
         Box b = insideBox(24);
         if (b == null) return new double[][]{new double[0], new double[0], new double[0], new double[0]};
         int bw = b.right - b.left, bh = b.bottom - b.top;
-        float[] v = new float[bw * bh];
-        for (int k = 0; k < insideCount; k++) { int g = insideIdx[k]; v[(g / W - b.top) * bw + g % W - b.left] = level[g]; }
-        float[] blurred = gaussOwn(v, bh, bw, 1.5);
+        float[] blurred = bValleyBlur;
         final float[] height = new float[bw * bh];
         int sw = bSoftBox.right - bSoftBox.left;
         for (int k = 0; k < insideCount; k++) {
@@ -1356,7 +1372,7 @@ public class Detect implements VisionProcessor, CameraStreamSource {
         boolean any = false;
         for (boolean b : inside) if (b) { any = true; break; }
         if (!any) { spotX = new int[0]; spotY = new int[0]; seedExpected = null; return; }
-        double[][] outline = outlineNormals(inside, insideBytes);
+        double[][] outline = outlineNormals(inside, insideBytes, level);
         stage("seeds: outline normals");
         Expect expected = ballSizeByRow(inside, insideBytes, level, valleys, outline);
         stage("seeds: ball size votes");
@@ -1445,17 +1461,19 @@ public class Detect implements VisionProcessor, CameraStreamSource {
         Box b = insideBox((int) Math.rint(4 * Math.max(blur, 0)) + 4);
         if (b == null) return result;
         int bw = b.right - b.left, bh = b.bottom - b.top;
-        float[] f = new float[bw * bh], v = new float[bw * bh];
-        for (int y = 0; y < bh; y++) for (int x = 0; x < bw; x++) { int i = (y + b.top) * W + x + b.left; if (inside[i]) { f[y * bw + x] = 1f; v[y * bw + x] = level[i]; } }
-        float[] values = v;
+        float[] values = bClimbBlur;   // blurred (or raw, blur <= 0) levels, computed in outlineNormals
         if (blur > 0) {
-            // outlineNormals already blurred the same mask with the same sigma over the same box
-            boolean shared = blur == 1.5 && bSoftBox != null && bSoftBox.top == b.top && bSoftBox.bottom == b.bottom && bSoftBox.left == b.left && bSoftBox.right == b.right;
-            float[] weight = shared ? bSoft : gaussOwn(f, bh, bw, blur), blurred = gaussOwn(v, bh, bw, blur);
+            float[] weight = bSoft;   // blur 1.5 is the mask blur outlineNormals already did, over the same box
+            if (blur != 1.5) {
+                float[] f = new float[bw * bh];
+                for (int k = 0; k < insideCount; k++) { int g = insideIdx[k]; f[(g / W - b.top) * bw + g % W - b.left] = 1f; }
+                weight = gaussOwn(f, bh, bw, blur);
+            }
+            float[] blurred = values;
             values = new float[bw * bh];
             for (int i = 0; i < bw * bh; i++) values[i] = blurred[i] / Math.max(weight[i], 1e-6f);
         }
-        for (int y = 0; y < bh; y++) for (int x = 0; x < bw; x++) { int i = (y + b.top) * W + x + b.left; if (inside[i]) result[i] = values[y * bw + x]; }
+        for (int k = 0; k < insideCount; k++) { int g = insideIdx[k]; result[g] = values[(g / W - b.top) * bw + g % W - b.left]; }
         return result;
     }
 

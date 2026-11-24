@@ -1057,6 +1057,10 @@ public class Detect implements VisionProcessor, CameraStreamSource {
         }
     }
 
+    /** Sigma-1.5 blur of the inside mask over insideBox(10), shared by valleyNormals and climbValues (same value at every inside pixel). */
+    static float[] bSoft;
+    static Box bSoftBox;
+
     static double[][] outlineNormals(boolean[] inside, byte[] insideBytes) {
         Box b = insideBox(10);
         if (b == null) return new double[][]{new double[0], new double[0], new double[0], new double[0]};
@@ -1065,6 +1069,7 @@ public class Detect implements VisionProcessor, CameraStreamSource {
         byte[] ib = new byte[bw * bh];
         for (int y = 0; y < bh; y++) for (int x = 0; x < bw; x++) if (inside[(y + b.top) * W + x + b.left]) { f[y * bw + x] = 1f; ib[y * bw + x] = 1; }
         final float[] soft = gauss(f, bh, bw, 1.5);
+        bSoft = soft; bSoftBox = b;
         final float[][] grad = new float[2][];
         final byte[] er = new byte[bw * bh];
         runAll(Arrays.<Runnable>asList(
@@ -1102,13 +1107,16 @@ public class Detect implements VisionProcessor, CameraStreamSource {
         Box b = insideBox(24);
         if (b == null) return new double[][]{new double[0], new double[0], new double[0], new double[0]};
         int bw = b.right - b.left, bh = b.bottom - b.top;
-        float[] f = new float[bw * bh], v = new float[bw * bh];
-        for (int y = 0; y < bh; y++) for (int x = 0; x < bw; x++) { int i = (y + b.top) * W + x + b.left; if (inside[i]) { f[y * bw + x] = 1f; v[y * bw + x] = level[i]; } }
-        final float[][] pair = new float[2][];
-        runAll(Arrays.<Runnable>asList(() -> pair[0] = gaussOwn(f, bh, bw, 1.5), () -> pair[1] = gaussOwn(v, bh, bw, 1.5)));
-        float[] weight = pair[0], blurred = pair[1];
+        float[] v = new float[bw * bh];
+        for (int k = 0; k < insideCount; k++) { int g = insideIdx[k]; v[(g / W - b.top) * bw + g % W - b.left] = level[g]; }
+        float[] blurred = gaussOwn(v, bh, bw, 1.5);
         final float[] height = new float[bw * bh];
-        for (int i = 0; i < bw * bh; i++) height[i] = f[i] != 0 ? blurred[i] / Math.max(weight[i], 1e-6f) : 0f;
+        int sw = bSoftBox.right - bSoftBox.left;
+        for (int k = 0; k < insideCount; k++) {
+            int g = insideIdx[k], y = g / W, x = g - y * W;
+            int i = (y - b.top) * bw + x - b.left;
+            height[i] = blurred[i] / Math.max(bSoft[(y - bSoftBox.top) * sw + x - bSoftBox.left], 1e-6f);
+        }
         final float[][] slopes = new float[2][];
         runAll(Arrays.<Runnable>asList(() -> slopes[0] = bSobelGaussOwn(height, bh, bw, 1, 0, 5, 2), () -> slopes[1] = bSobelGaussOwn(height, bh, bw, 0, 1, 5, 2)));
         float[] slopeX = slopes[0], slopeY = slopes[1];
@@ -1128,7 +1136,10 @@ public class Detect implements VisionProcessor, CameraStreamSource {
     }
 
     static float maxDistance(byte[] insideBytes, int maskSize) {
-        Mat m = bytesMat(insideBytes, H, W), d = tmp();
+        // crop to the inside box + 2 zero rows/cols: the 5x5 mask never reads further, so the max is unchanged
+        Box b = insideBox(2);
+        if (b == null) return 0f;
+        Mat m = bytesMat(crop(insideBytes, b, 1), b.bottom - b.top, b.right - b.left), d = tmp();
         long s = tic();
         Imgproc.distanceTransform(m, d, Imgproc.DIST_L2, maskSize);
         double max = Core.minMaxLoc(d).maxVal;
@@ -1438,9 +1449,9 @@ public class Detect implements VisionProcessor, CameraStreamSource {
         for (int y = 0; y < bh; y++) for (int x = 0; x < bw; x++) { int i = (y + b.top) * W + x + b.left; if (inside[i]) { f[y * bw + x] = 1f; v[y * bw + x] = level[i]; } }
         float[] values = v;
         if (blur > 0) {
-            final float[][] pair = new float[2][];
-            runAll(Arrays.<Runnable>asList(() -> pair[0] = gaussOwn(f, bh, bw, blur), () -> pair[1] = gaussOwn(v, bh, bw, blur)));
-            float[] weight = pair[0], blurred = pair[1];
+            // outlineNormals already blurred the same mask with the same sigma over the same box
+            boolean shared = blur == 1.5 && bSoftBox != null && bSoftBox.top == b.top && bSoftBox.bottom == b.bottom && bSoftBox.left == b.left && bSoftBox.right == b.right;
+            float[] weight = shared ? bSoft : gaussOwn(f, bh, bw, blur), blurred = gaussOwn(v, bh, bw, blur);
             values = new float[bw * bh];
             for (int i = 0; i < bw * bh; i++) values[i] = blurred[i] / Math.max(weight[i], 1e-6f);
         }

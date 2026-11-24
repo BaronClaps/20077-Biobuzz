@@ -188,6 +188,7 @@ public class Route {
         double work = 0, base = 0, limit = Double.POSITIVE_INFINITY, hEnd = 0;
         final double[][] S = new double[2][MAX_SAMPLES], D = new double[2][MAX_SAMPLES], E = new double[2][MAX_SAMPLES];
         final double[][] X = new double[2][MAX_SAMPLES], Y = new double[2][MAX_SAMPLES]; // sample positions
+        final double[][] DI = new double[2][MAX_SAMPLES], VA = new double[2][MAX_SAMPLES], VD = new double[2][MAX_SAMPLES]; // simOk caches
     }
 
     static class Pose3 {
@@ -235,6 +236,8 @@ public class Route {
         final double f1, f2, len, cost, h1, tr;
         final double x0, y0, cx1, cy1, cx2, cy2, x1, y1; // control points (segment naming) for gapIn
         final int n, slot;
+        boolean cached = false; // DI/VD filled in Work for this geometry
+        double vaV0 = Double.NaN; // v0 the VA cache was built for
 
         Geom(double f1, double f2, double len, int n, int slot, double tr, double cost, double h1,
              double x0, double y0, double cx1, double cy1, double cx2, double cy2, double x1, double y1) {
@@ -320,7 +323,7 @@ public class Route {
         final double L, d, reach, slowF, kmax, curvW, A, W, vFast, vSlow, vJ;
         final double[] Lopts, lo, hi;
         final Bound bd;
-        final double hl, hw; // half robot length / width
+        final double hl, hw, rc; // half robot length / width, half diagonal
         final int samples;
         final Set<String> dead = new HashSet<String>(); // ball-prefix keys proven infeasible
         final Set<String> badHop = new HashSet<String>(); // "prev>next" hops proven infeasible
@@ -330,6 +333,7 @@ public class Route {
             this.bd = bd;
             hl = p.robotLength / 2;
             hw = p.robotWidth / 2;
+            rc = StrictMath.sqrt(hl * hl + hw * hw);
             this.p = p;
             this.tier = tier;
             this.ws = ws;
@@ -528,18 +532,29 @@ public class Route {
         double L = g.len, A = c.A, W = c.W, v1 = c.vJ, hEnd = g.h1;
         double[] S = ws.S[g.slot], D = ws.D[g.slot], E = ws.E[g.slot], X = ws.X[g.slot], Y = ws.Y[g.slot];
         double h = h0, prevS = 0, pv = v0, sl = c.bodySlack(X[0], Y[0], h0);
-        if (Math.abs(wrap(StrictMath.atan2(E[0], D[0]) - h0)) > REV_LIM) return false;
-        double dh = wrap(hEnd - h0), rc = StrictMath.sqrt(c.hl * c.hl + c.hw * c.hw);
+        double[] DI = ws.DI[g.slot], VA = ws.VA[g.slot], VD = ws.VD[g.slot];
+        if (!g.cached) {
+            for (int i = 0; i <= N; i++) {
+                DI[i] = StrictMath.atan2(E[i], D[i]);
+                VD[i] = StrictMath.sqrt(v1 * v1 + 2 * A * Math.max(0, L - S[i]));
+            }
+            g.cached = true;
+        }
+        if (g.vaV0 != v0) {
+            for (int i = 1; i <= N; i++) VA[i] = StrictMath.sqrt(v0 * v0 + 2 * A * S[i]);
+            g.vaV0 = v0;
+        }
+        if (Math.abs(wrap(DI[0] - h0)) > REV_LIM) return false;
+        double dh = wrap(hEnd - h0), rc = c.rc;
         if (endT > 0 && Math.abs(dh) > 3.0) return false; // rotation direction ambiguous near 180 deg
         for (int i = 1; i <= N; i++) {
             double s = S[i];
-            double va = StrictMath.sqrt(v0 * v0 + 2 * A * s), vd = StrictMath.sqrt(v1 * v1 + 2 * A * Math.max(0, L - s));
-            double v = Math.min(Math.min(vc, va), vd);
+            double v = Math.min(Math.min(vc, VA[i]), VD[i]);
             double dt = (s - prevS) / Math.max(1e-3, (v + pv) / 2);
             double s0 = prevS, hp = h, pv0 = pv;
             prevS = s;
             pv = v;
-            double di = StrictMath.atan2(E[i], D[i]);
+            double di = DI[i];
             double target = endT > 0 ? h0 + dh * Math.min(1, s / (endT * L)) : di;
             double e = wrap(target - h), m = W * dt;
             h += e > m ? m : e < -m ? -m : e;

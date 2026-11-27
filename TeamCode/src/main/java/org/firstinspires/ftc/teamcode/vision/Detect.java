@@ -2,8 +2,6 @@ package org.firstinspires.ftc.teamcode.vision;
 
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
-import android.graphics.Color;
-import android.graphics.Paint;
 
 import com.acmerobotics.dashboard.config.Config;
 import com.qualcomm.robotcore.hardware.HardwareMap;
@@ -31,8 +29,6 @@ import java.util.concurrent.atomic.AtomicReference;
 @Config
 public class Detect implements VisionProcessor, CameraStreamSource {
 
-    // true only for a camera mounted on its side (the phone videos); a Logitech webcam streams landscape
-    public static boolean PORTRAIT = false;
     public static int WORK_WIDTH = 480; // 640x480 frames are shrunk to this: ~2x faster, same balls on the bench frames (320 lost some)
     public static int THREADS = 4;
     // raise to 3-5 during matches to save CPU; 1 = every frame
@@ -81,7 +77,7 @@ public class Detect implements VisionProcessor, CameraStreamSource {
     public static double[] calD = {0.008500997918842705, -0.02061464151378009, 0.0007540416777619344, -0.00012448636069353983, 0.0};
     public static double calW = 960.0, calH = 1280.0;
     public static volatile boolean calFromSdk = false;
-    // size of the image Ball.x / Ball.y refer to (transposed when PORTRAIT); 0 until the first frame
+    // size of the image Ball.x / Ball.y refer to; 0 until the first frame
     public static volatile int frameW, frameH;
 
     static long tic() { return System.nanoTime(); }
@@ -94,7 +90,7 @@ public class Detect implements VisionProcessor, CameraStreamSource {
         Box(int top, int bottom, int left, int right, int label) { this.top = top; this.bottom = bottom; this.left = left; this.right = right; this.label = label; }
     }
 
-    static final class Found { double x, y, r, expected = -1; double[] position, raw; boolean kept = true, estimated; int parts = 1; }
+    static final class Found { double x, y, r, expected = -1; double[] raw; boolean kept = true, estimated; int parts = 1; }
 
     static final class Fit {
         double cx, cy, r, score, mx, my;
@@ -181,13 +177,6 @@ public class Detect implements VisionProcessor, CameraStreamSource {
         Mat m1 = new Mat(), m2 = new Mat(), m3 = new Mat(), m4 = new Mat(), m5 = new Mat();
     }
     static final ThreadLocal<AScratch> aScratch = ThreadLocal.withInitial(AScratch::new);
-
-    static float[] cropF(float[] a, Box b) {
-        int w = b.right - b.left;
-        float[] out = new float[(b.bottom - b.top) * w];
-        for (int y = b.top; y < b.bottom; y++) System.arraycopy(a, y * W + b.left, out, (y - b.top) * w, w);
-        return out;
-    }
 
     static double median(double[] values, int n) {
         if (n == 0) return Double.NaN;
@@ -399,13 +388,6 @@ public class Detect implements VisionProcessor, CameraStreamSource {
         return count / Math.max(Math.PI * r * r, 1.0);
     }
 
-    static Box paddedBox(byte[] region, int margin) {
-        int top = H, bottom = -1, left = W, right = -1;
-        for (int y = 0; y < H; y++) for (int x = 0; x < W; x++) if (region[y * W + x] != 0) { if (y < top) top = y; if (y > bottom) bottom = y; if (x < left) left = x; if (x > right) right = x; }
-        if (bottom < 0) return null;
-        return new Box(Math.max(top - margin, 0), Math.min(bottom + 1 + margin, H), Math.max(left - margin, 0), Math.min(right + 1 + margin, W), 0);
-    }
-
     static int[] lastGroups;
 
     static int[] groupBuf = new int[0];
@@ -484,6 +466,7 @@ public class Detect implements VisionProcessor, CameraStreamSource {
     static int aLutR = -1, aLutG = -1, aLutB = -1;
 
     static Mat whiteBalance(Mat image) {
+        if (tileR == tileG && tileG == tileB) return image; // scale is exactly 1.0: identity
         if (aLutScaled == null || aLutR != tileR || aLutG != tileG || aLutB != tileB) {
             double target = (tileR + tileG + tileB) / 3.0;
             Mat lut = new Mat(1, 256, CvType.CV_8UC3);
@@ -650,10 +633,8 @@ public class Detect implements VisionProcessor, CameraStreamSource {
             Imgproc.dilate(aHoleIn, aHoleOut, ring);
             toc(s);
             aGetBytesInto(aHoleOut, holes);
-            for (int i = 0; i < total; i++) holes[i] = (byte) (holes[i] & filled[i]);
-        } else {
-            Arrays.fill(holes, (byte) 0);
         }
+        final boolean hasHoles = anyDiff;
         int window = Math.min(Math.max(2 * blemishMaxPx + 1, 3), 255);
         aDarkBuf = aBuf(aDarkBuf, total);
         final byte[] dark = aDarkBuf;
@@ -682,7 +663,7 @@ public class Detect implements VisionProcessor, CameraStreamSource {
         aOutliersBuf = aBuf(aOutliersBuf, total);
         byte[] outliers = aOutliersBuf;
         boolean any = false;
-        for (int i = 0; i < total; i++) { byte v = (byte) (dark[i] | holes[i]); outliers[i] = v; if (v != 0) any = true; }
+        for (int i = 0; i < total; i++) { byte v = (byte) (hasHoles ? dark[i] | (holes[i] & filled[i]) : dark[i]); outliers[i] = v; if (v != 0) any = true; }
         aAnyBlemish = false;
         if (!any) return outliers;
         int[] cnt = new int[1];
@@ -1075,25 +1056,52 @@ public class Detect implements VisionProcessor, CameraStreamSource {
         }
     }
 
-    static float[] sobel(float[] data, int rows, int cols, int dx, int dy, int ksize) {
-        Mat m = floatsMat(data, rows, cols), out = tmp();
-        long s = tic();
-        Imgproc.Sobel(m, out, CvType.CV_32F, dx, dy, ksize);
-        toc(s);
-        return getFloats(out);
+    /** Sigma-1.5 blur of the inside mask over insideBox(10), shared by valleyNormals and climbValues (same value at every inside pixel). */
+    static float[] bSoft;
+
+    static float[] bClimbBlur;
+    static double bClimbSigma; // seedClimbBlurPx read once per frame, so bClimbBlur and climbValues agree if the dashboard changes it
+    static float[][] bSlopes;
+
+    /** Level values of the inside pixels over box b (0 elsewhere). */
+    static float[] boxLevels(Box b, float[] level) {
+        int bw = b.right - b.left;
+        float[] v = new float[bw * (b.bottom - b.top)];
+        for (int k = 0; k < insideCount; k++) { int g = insideIdx[k]; v[(g / W - b.top) * bw + g % W - b.left] = level[g]; }
+        return v;
     }
 
-    static double[][] outlineNormals(boolean[] inside, byte[] insideBytes) {
+    /** Also runs, inside its two parallel batches, the blurs and slopes that valleyNormals and climbValues read back. */
+    static double[][] outlineNormals(byte[] insideBytes, float[] level) {
         Box b = insideBox(10);
         if (b == null) return new double[][]{new double[0], new double[0], new double[0], new double[0]};
         int bw = b.right - b.left, bh = b.bottom - b.top;
         float[] f = new float[bw * bh];
         byte[] ib = new byte[bw * bh];
-        for (int y = 0; y < bh; y++) for (int x = 0; x < bw; x++) if (inside[(y + b.top) * W + x + b.left]) { f[y * bw + x] = 1f; ib[y * bw + x] = 1; }
-        final float[] soft = gauss(f, bh, bw, 1.5);
+        for (int k = 0; k < insideCount; k++) { int g = insideIdx[k], i = (g / W - b.top) * bw + g % W - b.left; f[i] = 1f; ib[i] = 1; }
+        final double climbSigma = bClimbSigma = seedClimbBlurPx;
+        final Box vb = insideBox(24), cb = insideBox((int) Math.rint(4 * Math.max(climbSigma, 0)) + 4);
+        final float[] vv = boxLevels(vb, level), cv = boxLevels(cb, level);
+        final float[][] blurs = new float[3][];
+        runAll(Arrays.<Runnable>asList(
+                () -> bMaxDist5 = maxDistance(insideBytes, 5),
+                () -> blurs[0] = gauss(f, bh, bw, 1.5),
+                () -> blurs[1] = gaussOwn(vv, vb.bottom - vb.top, vb.right - vb.left, 1.5),
+                () -> blurs[2] = climbSigma > 0 ? gaussOwn(cv, cb.bottom - cb.top, cb.right - cb.left, climbSigma) : cv));
+        final float[] soft = blurs[0];
+        bSoft = soft; bClimbBlur = blurs[2];
+        final int vw = vb.right - vb.left, vh = vb.bottom - vb.top;
+        final float[] height = new float[vw * vh];
+        for (int k = 0; k < insideCount; k++) {
+            int g = insideIdx[k], y = g / W, x = g - y * W;
+            height[(y - vb.top) * vw + x - vb.left] = blurs[1][(y - vb.top) * vw + x - vb.left] / Math.max(soft[(y - b.top) * bw + x - b.left], 1e-6f);
+        }
+        final float[][] slopes = bSlopes = new float[2][];
         final float[][] grad = new float[2][];
         final byte[] er = new byte[bw * bh];
         runAll(Arrays.<Runnable>asList(
+                () -> slopes[0] = bSobelGaussOwn(height, vh, vw, 1, 0, 5, 2),
+                () -> slopes[1] = bSobelGaussOwn(height, vh, vw, 0, 1, 5, 2),
                 () -> grad[0] = sobelOwn(soft, bh, bw, 1, 0, 3),
                 () -> grad[1] = sobelOwn(soft, bh, bw, 0, 1, 3),
                 () -> {
@@ -1124,20 +1132,11 @@ public class Detect implements VisionProcessor, CameraStreamSource {
         return out;
     }
 
-    static double[][] valleyNormals(boolean[] inside, byte[] insideBytes, float[] level, boolean[] valleys) {
+    static double[][] valleyNormals(boolean[] inside, boolean[] valleys) {
         Box b = insideBox(24);
         if (b == null) return new double[][]{new double[0], new double[0], new double[0], new double[0]};
         int bw = b.right - b.left, bh = b.bottom - b.top;
-        float[] f = new float[bw * bh], v = new float[bw * bh];
-        for (int y = 0; y < bh; y++) for (int x = 0; x < bw; x++) { int i = (y + b.top) * W + x + b.left; if (inside[i]) { f[y * bw + x] = 1f; v[y * bw + x] = level[i]; } }
-        final float[][] pair = new float[2][];
-        runAll(Arrays.<Runnable>asList(() -> pair[0] = gaussOwn(f, bh, bw, 1.5), () -> pair[1] = gaussOwn(v, bh, bw, 1.5)));
-        float[] weight = pair[0], blurred = pair[1];
-        final float[] height = new float[bw * bh];
-        for (int i = 0; i < bw * bh; i++) height[i] = f[i] != 0 ? blurred[i] / Math.max(weight[i], 1e-6f) : 0f;
-        final float[][] slopes = new float[2][];
-        runAll(Arrays.<Runnable>asList(() -> slopes[0] = bSobelGaussOwn(height, bh, bw, 1, 0, 5, 2), () -> slopes[1] = bSobelGaussOwn(height, bh, bw, 0, 1, 5, 2)));
-        float[] slopeX = slopes[0], slopeY = slopes[1];
+        float[] slopeX = bSlopes[0], slopeY = bSlopes[1];   // computed in outlineNormals' second batch
         int n = 0;
         for (int y = 0; y < bh; y++) { int g = (y + b.top) * W + b.left; for (int x = 0; x < bw; x++) if (valleys[g + x] && inside[g + x]) n++; }
         double[][] out = new double[4][n];
@@ -1153,20 +1152,18 @@ public class Detect implements VisionProcessor, CameraStreamSource {
         return out;
     }
 
-    static double[][] columns(List<double[]> rows) {
-        int n = rows.size(), k = rows.isEmpty() ? 4 : rows.get(0).length;
-        double[][] out = new double[k][n];
-        for (int i = 0; i < n; i++) for (int j = 0; j < k; j++) out[j][i] = rows.get(i)[j];
-        return out;
-    }
+    static float bMaxDist5;
 
+    /** Thread-safe (own scratch Mats); outlineNormals runs it in its parallel batch and callers read bMaxDist5. */
     static float maxDistance(byte[] insideBytes, int maskSize) {
-        Mat m = bytesMat(insideBytes, H, W), d = tmp();
-        long s = tic();
-        Imgproc.distanceTransform(m, d, Imgproc.DIST_L2, maskSize);
-        double max = Core.minMaxLoc(d).maxVal;
-        toc(s);
-        return (float) max;
+        // crop to the inside box + 2 zero rows/cols: the 5x5 mask never reads further, so the max is unchanged
+        Box b = insideBox(2);
+        if (b == null) return 0f;
+        BScratch s = bScratch.get();
+        s.a.create(b.bottom - b.top, b.right - b.left, CvType.CV_8UC1);
+        s.a.put(0, 0, crop(insideBytes, b, 1));
+        Imgproc.distanceTransform(s.a, s.b, Imgproc.DIST_L2, maskSize);
+        return (float) Core.minMaxLoc(s.b).maxVal;
     }
 
     static List<double[]> spacedPeaks(float[] coverage, double minimum, float[] radiusMap, double[] rowRadius, byte[] insideImage, double spacing, double minFill) {
@@ -1262,7 +1259,7 @@ public class Detect implements VisionProcessor, CameraStreamSource {
             List<Float> weights = new ArrayList<>();
             sources.add(outline);
             weights.add(1f);
-            double[][] vn = valleyNormals(inside, insideBytes, level, valleys);
+            double[][] vn = valleyNormals(inside, valleys);
             stage("seeds: valley normals");
             double[][] neg = new double[][]{vn[0], vn[1], new double[vn[2].length], new double[vn[3].length]};
             for (int i = 0; i < vn[2].length; i++) { neg[2][i] = -vn[2][i]; neg[3][i] = -vn[3][i]; }
@@ -1270,7 +1267,7 @@ public class Detect implements VisionProcessor, CameraStreamSource {
             weights.add((float) sizeVoteValleyWeight);
             sources.add(neg);
             weights.add((float) sizeVoteValleyWeight);
-            double largest = Math.max(maxDistance(insideBytes, 5) * 1.3, sizeVoteSmallestPx + 1);
+            double largest = Math.max(bMaxDist5 * 1.3, sizeVoteSmallestPx + 1);
             int margin = (int) Math.ceil(largest) + (int) Math.rint(4 * Math.max(0.15 * largest, 1.0)) + 3;
             List<Double> trial = new ArrayList<>();
             for (double r = sizeVoteSmallestPx; r <= largest; r *= 1 + sizeVoteStepPctg) trial.add(r);
@@ -1372,20 +1369,19 @@ public class Detect implements VisionProcessor, CameraStreamSource {
     }
 
     static Expect seedExpected;
-    static float[] lastCoverage = new float[0];
     static int[] spotX, spotY;
 
     static void seedPoints(boolean[] inside, byte[] insideBytes, float[] level, boolean[] valleys) {
         boolean any = false;
         for (boolean b : inside) if (b) { any = true; break; }
         if (!any) { spotX = new int[0]; spotY = new int[0]; seedExpected = null; return; }
-        double[][] outline = outlineNormals(inside, insideBytes);
+        double[][] outline = outlineNormals(insideBytes, level);
         stage("seeds: outline normals");
         Expect expected = ballSizeByRow(inside, insideBytes, level, valleys, outline);
         stage("seeds: ball size votes");
         seedExpected = expected;
         double[] rowRadius = new double[H];
-        if (expected == null) { double fixed = Math.max(maxDistance(insideBytes, 5), 2.0); Arrays.fill(rowRadius, fixed); }
+        if (expected == null) { double fixed = Math.max(bMaxDist5, 2.0); Arrays.fill(rowRadius, fixed); }
         else for (int y = 0; y < H; y++) rowRadius[y] = expected.at(y);
         int n = outline[0].length;
         double sigma = 1.0, maxR = 0;
@@ -1441,10 +1437,9 @@ public class Detect implements VisionProcessor, CameraStreamSource {
         runAll(jobs);
         byte[] insideImage = bInsideImage();
         stage("seeds: coverage votes");
-        lastCoverage = coverage;
         List<double[]> kept = spacedPeaks(coverage, seedMinCoverPctg, null, rowRadius, insideImage, seedSpacingPctg, seedMinFillPctg);
         stage("seeds: spaced peaks");
-        float[] climb = climbValues(inside, insideBytes, level, seedClimbBlurPx);
+        float[] climb = climbValues(bClimbSigma);
         stage("seeds: climb");
         Map<Integer, int[]> firstOnTop = new HashMap<>();
         int[] seedIdx = new int[kept.size()];
@@ -1462,24 +1457,26 @@ public class Detect implements VisionProcessor, CameraStreamSource {
         for (int k = 0; k < c; k++) { spotX[k] = seedIdx[k] % W; spotY[k] = seedIdx[k] / W; }
     }
 
-    static float[] climbValues(boolean[] inside, byte[] insideBytes, float[] level, double blur) {
+    static float[] climbValues(double blur) {
         if (bClimb.length != H * W) bClimb = new float[H * W];
         float[] result = bClimb;
         Arrays.fill(result, Float.NEGATIVE_INFINITY);
         Box b = insideBox((int) Math.rint(4 * Math.max(blur, 0)) + 4);
         if (b == null) return result;
         int bw = b.right - b.left, bh = b.bottom - b.top;
-        float[] f = new float[bw * bh], v = new float[bw * bh];
-        for (int y = 0; y < bh; y++) for (int x = 0; x < bw; x++) { int i = (y + b.top) * W + x + b.left; if (inside[i]) { f[y * bw + x] = 1f; v[y * bw + x] = level[i]; } }
-        float[] values = v;
+        float[] values = bClimbBlur;   // blurred (or raw, blur <= 0) levels, computed in outlineNormals
         if (blur > 0) {
-            final float[][] pair = new float[2][];
-            runAll(Arrays.<Runnable>asList(() -> pair[0] = gaussOwn(f, bh, bw, blur), () -> pair[1] = gaussOwn(v, bh, bw, blur)));
-            float[] weight = pair[0], blurred = pair[1];
+            float[] weight = bSoft;   // blur 1.5 is the mask blur outlineNormals already did, over the same box
+            if (blur != 1.5) {
+                float[] f = new float[bw * bh];
+                for (int k = 0; k < insideCount; k++) { int g = insideIdx[k]; f[(g / W - b.top) * bw + g % W - b.left] = 1f; }
+                weight = gaussOwn(f, bh, bw, blur);
+            }
+            float[] blurred = values;
             values = new float[bw * bh];
             for (int i = 0; i < bw * bh; i++) values[i] = blurred[i] / Math.max(weight[i], 1e-6f);
         }
-        for (int y = 0; y < bh; y++) for (int x = 0; x < bw; x++) { int i = (y + b.top) * W + x + b.left; if (inside[i]) result[i] = values[y * bw + x]; }
+        for (int k = 0; k < insideCount; k++) { int g = insideIdx[k]; result[g] = values[(g / W - b.top) * bw + g % W - b.left]; }
         return result;
     }
 
@@ -2566,21 +2563,17 @@ public class Detect implements VisionProcessor, CameraStreamSource {
         return false;
     }
 
-    static byte[] dRemRem = new byte[0], dRemOut = new byte[0], dRemOpened = new byte[0];
+    static byte[] dRemOpened = new byte[0];
     static int[] dRemLab = new int[0];
     static float[] dRemThick = new float[0];
 
     static List<Found> remainingBalls(byte[] filled, List<double[]> circles, Expect expected) {
         List<Found> estimated = new ArrayList<>();
-        if (dRemRem.length != H * W) { dRemRem = new byte[H * W]; dRemOut = new byte[H * W]; dRemOpened = new byte[H * W]; dRemLab = new int[H * W]; dRemThick = new float[H * W]; }
-        byte[] rem = dRemRem;
-        for (int i = 0; i < H * W; i++) rem[i] = (byte) (filled[i] != 0 ? 1 : 0);
-        Mat remaining = bytesMat(rem, H, W);
+        if (dRemOpened.length != H * W) { dRemOpened = new byte[H * W]; dRemLab = new int[H * W]; dRemThick = new float[H * W]; }
+        Mat remaining = bytesMat(filled, H, W);
         long s = tic();
         for (double[] c : circles) Imgproc.circle(remaining, new Point(Math.rint(c[0]), Math.rint(c[1])), (int) Math.rint(c[2]), new Scalar(0), -1);
         toc(s);
-        remaining.get(0, 0, dRemOut);
-        pRemaining = dRemOut;
         if (expected == null) return estimated;
         Mat labels = tmp(), stats = tmp(), cents = tmp();
         s = tic();
@@ -2665,7 +2658,7 @@ public class Detect implements VisionProcessor, CameraStreamSource {
             for (int i = 0; i < n; i++) {
                 int best = 0;
                 double bd = Double.MAX_VALUE;
-                for (int c = 0; c < count; c++) { double d = dist(px[i] - cx[c], py[i] - cy[c]); if (d < bd) { bd = d; best = c; } }
+                for (int c = 0; c < count; c++) { double dx = px[i] - cx[c], dy = py[i] - cy[c], d = dx * dx + dy * dy; if (d < bd) { bd = d; best = c; } }
                 sx[best] += px[i]; sy[best] += py[i]; sn[best]++;
             }
             boolean close = true;
@@ -2742,17 +2735,12 @@ public class Detect implements VisionProcessor, CameraStreamSource {
         return low;
     }
 
-    /** Floor position and the radius a ball should have at (b.x, b.y). */
-    static void place(Found b, double[] origin, double focal) {
+    /** Floor point and the radius a ball should have at (b.x, b.y). */
+    static void place(Found b, double focal) {
         double[] p = floorPoint(b.x, b.y, ballRadiusCm);
         b.raw = p;
-        b.position = null;
         b.expected = -1;
-        if (p == null) return;
-        double rx = p[0], ry = p[1];
-        if (origin != null) { rx -= origin[0]; ry -= origin[1]; }
-        b.position = new double[]{rx, ry};
-        if (p[2] > 1e-6) b.expected = focal * ballRadiusCm / 2 * (1 / p[2] + p[3] / (p[2] * p[2]));
+        if (p != null && p[2] > 1e-6) b.expected = focal * ballRadiusCm / 2 * (1 / p[2] + p[3] / (p[2] * p[2]));
     }
 
     /**
@@ -2762,7 +2750,7 @@ public class Detect implements VisionProcessor, CameraStreamSource {
      * - the other pieces nearer each other than one expected ball radius (two touching balls are 2 radii apart) become one
      *   circle enclosing them, if the mask fills it; the size filter then judges it like any other.
      */
-    static List<Found> mergeFragments(List<Found> all, double[] origin, double focal) {
+    static List<Found> mergeFragments(List<Found> all, double focal) {
         double small = Math.sqrt(Math.max(0, 1 - sizeFilterPctg)); // below this fraction of the expected radius the size filter drops it
         List<Found> balls = new ArrayList<>(), whole = new ArrayList<>();
         for (Found f : all) (f.expected > 0 && f.r < small * f.expected ? balls : whole).add(f);
@@ -2771,12 +2759,12 @@ public class Detect implements VisionProcessor, CameraStreamSource {
             // overlapping it, not just inside: pieces also sit on a ball's outline (shaded edge)
             for (Found w : whole) if (Math.hypot(f.x - w.x, f.y - w.y) < w.r + f.r) { it.remove(); break; }
         }
-        List<Found> merged = mergePieces(balls, origin, focal);
+        List<Found> merged = mergePieces(balls, focal);
         merged.addAll(0, whole);
         return merged;
     }
 
-    static List<Found> mergePieces(List<Found> balls, double[] origin, double focal) {
+    static List<Found> mergePieces(List<Found> balls, double focal) {
         int n = balls.size();
         int[] group = new int[n];
         for (int i = 0; i < n; i++) group[i] = i;
@@ -2806,7 +2794,7 @@ public class Detect implements VisionProcessor, CameraStreamSource {
             m.parts = g.size();
             // only a ball the mask actually fills: separate junk circles must not add up to one ball-sized circle
             if (fillOf(pFilled, m.x, m.y, m.r) < circleMinFillPctg) { out.addAll(g); continue; }
-            place(m, origin, focal);
+            place(m, focal);
             out.add(m);
         }
         return out;
@@ -2836,10 +2824,9 @@ public class Detect implements VisionProcessor, CameraStreamSource {
         for (double[] c : accepted) { Found b = new Found(); b.x = c[0]; b.y = c[1]; b.r = c[2]; balls.add(b); }
         for (Fit f : fits) { Found b = new Found(); b.x = f.cx; b.y = f.cy; b.r = f.r; balls.add(b); }
         balls.addAll(estimated);
-        double[] origin = floorPoint((W - 1) / 2.0, H - 1, 0);
         double focal = (calMatrix.get(0, 0)[0] + calMatrix.get(1, 1)[0]) / 2;
-        for (Found b : balls) place(b, origin, focal);
-        balls = mergeFragments(balls, origin, focal);
+        for (Found b : balls) place(b, focal);
+        balls = mergeFragments(balls, focal);
         StringBuilder found = new StringBuilder();
         for (Found b : balls) {
             if (b.expected > 0) b.kept = Math.abs(b.r * b.r - b.expected * b.expected) <= sizeFilterPctg * b.expected * b.expected;
@@ -2862,7 +2849,6 @@ public class Detect implements VisionProcessor, CameraStreamSource {
     static Mat tmp() { return track(new Mat()); }
     static Mat tmp(int rows, int cols, int type) { return track(new Mat(rows, cols, type)); }
     static Mat tmpZeros(int rows, int cols, int type) { return track(Mat.zeros(rows, cols, type)); }
-    static Mat tmpClone(Mat m) { return track(m.clone()); }
     static MatOfPoint tmpPoints(Point[] points) { MatOfPoint m = new MatOfPoint(points); temps.add(m); return m; }
 
     static void findContoursTracked(Mat image, List<MatOfPoint> contours, Mat hierarchy, int mode, int method) {
@@ -2934,28 +2920,17 @@ public class Detect implements VisionProcessor, CameraStreamSource {
     static long stageStart;
     static void stage(String name) { long now = System.nanoTime(); stageNanos.merge(name, now - stageStart, Long::sum); stageStart = now; }
 
-    static Mat pImage, pRaw;
-    static byte[] pMask, pSmoothed, pFilled, pRemaining;
-    static float[] pLevel;
-    static boolean[] pValleys;
-    static List<Conn> pConns = new ArrayList<>();
-    static List<double[]> pArcs = new ArrayList<>();
-    static double[][] pGrown = new double[0][];
-    static List<double[][]> pPaths = new ArrayList<>();
-    static int[] pClumps = new int[0], pSections = new int[0], pRefitSections = new int[0];
-    static List<Fit> pFirstFits = new ArrayList<>(), pRefitFits = new ArrayList<>();
-    static List<Found> pEstimated = new ArrayList<>(), pBalls = new ArrayList<>();
+    static byte[] pFilled;
+    static List<Fit> pRefitFits = new ArrayList<>();
+    static List<Found> pEstimated = new ArrayList<>();
 
     static List<Found> run(Mat raw) {
         H = raw.rows(); W = raw.cols();
         stageStart = System.nanoTime();
-        pRaw = raw;
         Mat image = whiteBalance(raw);
-        pImage = image;
         byte[] mask = yellowMask(image);
         dropSpecks(mask);
         byte[] filled = fillHoles(mask);
-        pMask = mask;
         pFilled = filled;
         stage("mask");
         aBgrBuf = aBuf(aBgrBuf, H * W * 3);
@@ -2964,7 +2939,6 @@ public class Detect implements VisionProcessor, CameraStreamSource {
         byte[] brightness = lastL;
         byte[][] blemishOut = new byte[1][];
         byte[] smoothed = smoothInside(bgr, brightness, mask, filled, blemishOut);
-        pSmoothed = smoothed;
         stage("smoothing");
         singleBalls(filled);
         aRemBuf = aBuf(aRemBuf, H * W);
@@ -2980,7 +2954,6 @@ public class Detect implements VisionProcessor, CameraStreamSource {
         }
         byte[] smoothL = aSmoothL(smoothed);
         float[] level = brightnessRanks(smoothL, remaining);
-        pLevel = level;
         stage("single balls + height map");
         boolean[] inside = new boolean[H * W];
         byte[] insideBytes = new byte[H * W];
@@ -2990,13 +2963,11 @@ public class Detect implements VisionProcessor, CameraStreamSource {
         for (double[] c : accepted) refs.add(new double[]{c[1], c[2]});
         Expect singleExpected = radiusByRow(refs);
         boolean[] valleys = valleyLines(level, singleExpected);
-        pValleys = valleys;
         stage("valley lines");
         seedPoints(inside, insideBytes, level, valleys);
         stage("seeds");
         int[] cnt = new int[1];
         int[] clumps = connected(insideBytes, 8, cnt, 2);
-        pClumps = clumps;
         int clumpCount = cnt[0];
         List<Conn> first = spotConnections(clumps, singleExpected, valleys, false);
         stage("first connections");
@@ -3010,22 +2981,16 @@ public class Detect implements VisionProcessor, CameraStreamSource {
         List<Conn> conns = spotConnections(clumps, expected, valleys, true);
         stage("connections + pair arcs");
         ballArcs(conns, firstSections, inside, expected);
-        pConns = conns;
         stage("one arc per ball");
         List<double[]> arcs = shiftArcs(conns, smoothL, inside);
-        pArcs = arcs;
         stage("shift");
         double[][] grown = extendArcs(arcs, inside);
-        pGrown = grown;
         stage("extend");
         List<double[][]> paths = snapArcs(arcs, grown, inside, insideBytes);
-        pPaths = paths;
         stage("snap");
         int[] sections = sectionByArcs(inside, paths, sectionClumps(clumps, conns));
-        pSections = sections;
         stage("split");
         List<Fit> fits = clumpCircles(sections, inside, filled);
-        pFirstFits = fits;
         stage("fit");
         Map<Long, Integer> fronts = frontPairs(conns);
         stage("fit");
@@ -3041,7 +3006,6 @@ public class Detect implements VisionProcessor, CameraStreamSource {
             }
             fits = rClumpCirclesInc(sections, inside, filled);
         }
-        pRefitSections = sections;
         pRefitFits = fits;
         stage("refit");
         List<double[]> circles = new ArrayList<>(accepted);
@@ -3050,7 +3014,6 @@ public class Detect implements VisionProcessor, CameraStreamSource {
         pEstimated = estimated;
         stage("remaining mass");
         List<Found> out = locateBalls(fits, estimated);
-        pBalls = out;
         stage("locate");
         return out;
     }
@@ -3075,394 +3038,11 @@ public class Detect implements VisionProcessor, CameraStreamSource {
         }
     }
 
-    public static final String[] MODE_NAMES = {
-            "0 raw", "1 white balance", "2 mask", "3 smoothed", "4 single balls", "5 height map",
-            "6 b&w height map", "7 valley lines", "8 seed votes", "9 seeds", "10 spot connections",
-            "11 arc shift", "12 arc extend", "13 merged outline", "14 sections", "15 circles",
-            "16 refit", "17 size filter", "18 remaining mask", "19 center dots", "20 centers",
-            "21 undistorted centers"
-    };
-
-    private static final Scalar RED = new Scalar(0, 0, 255);
-    private static final Scalar GREEN = new Scalar(0, 255, 0);
-    private static final Scalar BLUE = new Scalar(255, 0, 0);
-    private static final Scalar CYAN = new Scalar(255, 255, 0);
-    private static final Scalar YELLOW = new Scalar(0, 255, 255);
-    private static final Scalar ORANGE = new Scalar(0, 165, 255);
-    private static final int FONT = Imgproc.FONT_HERSHEY_SIMPLEX;
-
-    static String panelLabel = "";
-    static byte[] hueColors;
-
-    static void ensureHueColors() {
-        if (hueColors != null) return;
-        Mat hsv = new Mat(1, 180, CvType.CV_8UC3);
-        byte[] values = new byte[180 * 3];
-        for (int h = 0; h < 180; h++) { values[h * 3] = (byte) h; values[h * 3 + 1] = (byte) 255; values[h * 3 + 2] = (byte) 255; }
-        hsv.put(0, 0, values);
-        Mat bgrColors = new Mat();
-        Imgproc.cvtColor(hsv, bgrColors, Imgproc.COLOR_HSV2BGR);
-        hueColors = getBytes(bgrColors);
-        hsv.release();
-        bgrColors.release();
-    }
-
-    static void paint(byte[] data, int pixel, int hue) {
-        data[pixel * 3] = hueColors[hue * 3];
-        data[pixel * 3 + 1] = hueColors[hue * 3 + 1];
-        data[pixel * 3 + 2] = hueColors[hue * 3 + 2];
-    }
-
-    static void paint(byte[] data, int pixel, int b, int g, int r) {
-        data[pixel * 3] = (byte) b;
-        data[pixel * 3 + 1] = (byte) g;
-        data[pixel * 3 + 2] = (byte) r;
-    }
-
-    static Mat heightMap(boolean colored) {
-        ensureHueColors();
-        Mat view = tmpClone(pImage);
-        byte[] d = getBytes(view);
-        for (int i = 0; i < H * W; i++) {
-            if (pLevel[i] < 0) continue;
-            float f = Math.min(Math.max(pLevel[i], 0f), 1f);
-            if (colored) paint(d, i, (int) ((1 - f) * 150));
-            else { int g = (int) (f * 255); paint(d, i, g, g, g); }
-        }
-        view.put(0, 0, d);
-        return view;
-    }
-
-    static void arc(Mat image, double cx, double cy, double r, double start, double end, Scalar color) {
-        Imgproc.ellipse(image, new Point(Math.rint(cx * 16), Math.rint(cy * 16)), new Size(Math.rint(r * 16), Math.rint(r * 16)), 0, start, end, color, 1, Imgproc.LINE_8, 4);
-    }
-
-    static Point rounded(double x, double y) { return new Point(Math.rint(x), Math.rint(y)); }
-
-    static Mat arcWalls() {
-        Mat walls = tmpZeros(H, W, CvType.CV_8UC1);
-        for (double[][] p : pPaths) {
-            int n = p[0].length;
-            if (n >= 2) {
-                Point[] pts = new Point[n];
-                for (int j = 0; j < n; j++) pts[j] = new Point(Math.rint(p[0][j] * 16), Math.rint(p[1][j] * 16));
-                Imgproc.polylines(walls, Collections.singletonList(tmpPoints(pts)), false, new Scalar(255), 1, Imgproc.LINE_8, 4);
-            } else if (n == 1) walls.put((int) Math.rint(p[1][0]), (int) Math.rint(p[0][0]), 255);
-        }
-        return walls;
-    }
-
-    static Mat drawSections(int[] sections) {
-        ensureHueColors();
-        Mat view = tmpClone(pImage);
-        byte[] d = getBytes(view);
-        for (int i = 0; i < H * W; i++) {
-            if (sections[i] <= 0) continue;
-            int hue = (sections[i] * 47) % 180;
-            for (int c = 0; c < 3; c++) d[i * 3 + c] = (byte) (((d[i * 3 + c] & 255) / 2) + ((hueColors[hue * 3 + c] & 255) / 2));
-        }
-        view.put(0, 0, d);
-        for (int i = 0; i < spotX.length; i++) Imgproc.circle(view, new Point(spotX[i], spotY[i]), 1, RED, -1);
-        return view;
-    }
-
-    static void drawFits(Mat view, List<Fit> fits) {
-        for (double[] c : accepted) {
-            Point center = rounded(c[0], c[1]);
-            Imgproc.circle(view, center, (int) Math.rint(c[2]), CYAN, 1);
-            Imgproc.circle(view, center, 1, CYAN, -1);
-        }
-        for (Fit f : fits) {
-            Scalar color = f.fixed ? YELLOW : GREEN;
-            Point center = rounded(f.cx, f.cy);
-            Imgproc.circle(view, center, (int) Math.rint(f.r), color, 1);
-            Imgproc.circle(view, center, 1, color, -1);
-        }
-    }
-
-    static int keptCount() {
-        int n = 0;
-        for (Found b : pBalls) if (b.kept) n++;
-        return n;
-    }
-
-    static Mat buildPanel(int mode) {
-        Mat view;
-        switch (mode) {
-            case 0:
-                panelLabel = "raw";
-                return tmpClone(pRaw);
-            case 1:
-                panelLabel = "white balance";
-                return tmpClone(pImage);
-            case 2: {
-                panelLabel = "mask";
-                view = tmp();
-                Imgproc.cvtColor(bytesMat(pMask, H, W), view, Imgproc.COLOR_GRAY2BGR);
-                return view;
-            }
-            case 3:
-                panelLabel = "smoothed";
-                view = tmp(H, W, CvType.CV_8UC3);
-                view.put(0, 0, pSmoothed);
-                return view;
-            case 4: {
-                view = tmpClone(pImage);
-                for (int i = 0; i < rejectedContours.size(); i++) {
-                    MatOfPoint contour = rejectedContours.get(i);
-                    Imgproc.drawContours(view, Collections.singletonList(contour), -1, RED, 1);
-                    Rect box = Imgproc.boundingRect(contour);
-                    Imgproc.putText(view, Math.round(rejectedPct.get(i) * 100) + "%", new Point(box.x, Math.max(box.y - 4, 12)), FONT, 0.5, RED, 2);
-                }
-                for (int i = 0; i < accepted.size(); i++) {
-                    double[] c = accepted.get(i);
-                    Imgproc.circle(view, rounded(c[0], c[1]), (int) Math.rint(c[2]), GREEN, 1);
-                    Imgproc.circle(view, rounded(c[0], c[1]), 3, GREEN, -1);
-                    Imgproc.putText(view, Math.round(acceptedPct.get(i) * 100) + "%", new Point((int) (c[0] - c[2]), Math.max((int) (c[1] - c[2]) - 4, 12)), FONT, 0.5, GREEN, 2);
-                }
-                panelLabel = "single balls: " + accepted.size();
-                return view;
-            }
-            case 5:
-                panelLabel = "height map";
-                return heightMap(true);
-            case 6:
-                panelLabel = "b&w height map";
-                return heightMap(false);
-            case 7: {
-                view = heightMap(false);
-                byte[] d = getBytes(view);
-                for (int i = 0; i < H * W; i++) if (pValleys[i]) paint(d, i, 0, 0, 255);
-                view.put(0, 0, d);
-                List<MatOfPoint> outlines = new ArrayList<>();
-                findContoursTracked(bytesMat(pFilled, H, W), outlines, tmp(), Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_NONE);
-                Imgproc.drawContours(view, outlines, -1, ORANGE, 1);
-                panelLabel = "valley lines";
-                return view;
-            }
-            case 8: {
-                ensureHueColors();
-                view = tmpClone(pImage);
-                float most = 0;
-                for (int i = 0; i < H * W; i++) if (pLevel[i] >= 0) most = Math.max(most, lastCoverage[i]);
-                if (most > 0) {
-                    byte[] d = getBytes(view);
-                    for (int i = 0; i < H * W; i++) {
-                        if (pLevel[i] < 0) continue;
-                        float strength = Math.min(Math.max(lastCoverage[i] / Math.max(most, 1e-6f), 0f), 1f);
-                        paint(d, i, (int) ((1 - strength) * 150));
-                    }
-                    view.put(0, 0, d);
-                }
-                panelLabel = "seed votes";
-                return view;
-            }
-            case 9:
-                view = tmpClone(pImage);
-                for (int i = 0; i < spotX.length; i++) Imgproc.circle(view, new Point(spotX[i], spotY[i]), 1, RED, -1);
-                panelLabel = "seeds: " + spotX.length;
-                return view;
-            case 10: {
-                view = heightMap(false);
-                byte[] d = getBytes(view);
-                for (int i = 0; i < H * W; i++) if (pValleys[i]) paint(d, i, 0, 0, 160);
-                view.put(0, 0, d);
-                int guesses = 0, arcCount = 0;
-                for (Conn c : pConns) {
-                    Imgproc.line(view, rounded(c.sx, c.sy), rounded(c.ex, c.ey), BLUE, 1);
-                    if (c.guessed) guesses++;
-                    if (c.hasArc) arcCount++;
-                }
-                Mat arcs = tmpZeros(H, W, CvType.CV_8UC1);
-                boolean[] straights = new boolean[H * W];
-                for (Conn c : pConns) {
-                    if (c.hasArc) {
-                        if (c.hasSpan) arc(arcs, c.acx, c.acy, c.ar, c.span0, c.span1, new Scalar(255));
-                    } else if (c.guessed) {
-                        double dx = c.ex - c.sx, dy = c.ey - c.sy;
-                        double length = Math.max(Math.hypot(dx, dy), 1e-6);
-                        double nx = -dy / length, ny = dx / length;
-                        Mat line = tmpZeros(H, W, CvType.CV_8UC1);
-                        Imgproc.line(line, rounded(c.pointX - nx * 2000, c.pointY - ny * 2000), rounded(c.pointX + nx * 2000, c.pointY + ny * 2000), new Scalar(255), 1);
-                        byte[] lineData = getBytes(line);
-                        int clump = pClumps[(int) c.sy * W + (int) c.sx];
-                        for (int i = 0; i < H * W; i++) if (lineData[i] != 0 && pClumps[i] == clump) straights[i] = true;
-                    }
-                }
-                byte[] arcData = getBytes(arcs);
-                d = getBytes(view);
-                for (int i = 0; i < H * W; i++) if (straights[i]) paint(d, i, 0, 200, 255);
-                for (int i = 0; i < H * W; i++) if (arcData[i] != 0 && pLevel[i] >= 0) paint(d, i, 0, 255, 0);
-                view.put(0, 0, d);
-                for (Conn c : pConns) {
-                    Imgproc.circle(view, rounded(c.sx, c.sy), 1, YELLOW, -1);
-                    Imgproc.circle(view, rounded(c.ex, c.ey), 1, YELLOW, -1);
-                }
-                panelLabel = "spot connections: " + pConns.size() + " guesses: " + guesses + " arcs: " + arcCount;
-                return view;
-            }
-            case 11: {
-                view = tmpClone(pImage);
-                Set<String> seen = new HashSet<>();
-                for (Conn c : pConns) {
-                    if (!c.hasArc || !c.hasSpan) continue;
-                    if (seen.add(Math.rint(c.acx * 1000) + "," + Math.rint(c.acy * 1000) + "," + Math.rint(c.ar * 1000))) arc(view, c.acx, c.acy, c.ar, c.span0, c.span1, new Scalar(0, 110, 0));
-                }
-                for (double[] a : pArcs) arc(view, a[0], a[1], a[2], a[3], a[4], GREEN);
-                panelLabel = "arc shift: " + pArcs.size() + " arcs";
-                return view;
-            }
-            case 12: {
-                view = tmpClone(pImage);
-                for (int i = 0; i < pArcs.size(); i++) {
-                    double[] a = pArcs.get(i);
-                    double[] g = pGrown[i];
-                    arc(view, a[0], a[1], a[2], g[0], g[1], CYAN);
-                    if (Math.max(a[3], g[0]) < Math.min(a[4], g[1])) arc(view, a[0], a[1], a[2], Math.max(a[3], g[0]), Math.min(a[4], g[1]), GREEN);
-                }
-                panelLabel = "arc extend: " + pArcs.size() + " arcs";
-                return view;
-            }
-            case 13: {
-                view = tmpClone(pImage);
-                Mat outline = arcWalls();
-                List<MatOfPoint> edges = new ArrayList<>();
-                Mat insideMat = tmp(H, W, CvType.CV_8UC1);
-                byte[] insideData = new byte[H * W];
-                for (int i = 0; i < H * W; i++) insideData[i] = (byte) (pLevel[i] >= 0 ? 1 : 0);
-                insideMat.put(0, 0, insideData);
-                findContoursTracked(insideMat, edges, tmp(), Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_NONE);
-                Imgproc.drawContours(outline, edges, -1, new Scalar(255), 1);
-                byte[] outlineData = getBytes(outline);
-                byte[] d = getBytes(view);
-                for (int i = 0; i < H * W; i++) if (outlineData[i] != 0 && pLevel[i] >= 0) paint(d, i, 0, 255, 0);
-                view.put(0, 0, d);
-                panelLabel = "merged outline";
-                return view;
-            }
-            case 14: {
-                view = drawSections(pSections);
-                Set<Integer> labels = new HashSet<>();
-                for (int v : pSections) if (v > 0) labels.add(v);
-                panelLabel = "sections: " + labels.size();
-                return view;
-            }
-            case 15:
-                view = tmpClone(pImage);
-                drawFits(view, pFirstFits);
-                panelLabel = "circles: " + (pFirstFits.size() + accepted.size());
-                return view;
-            case 16:
-                view = drawSections(pRefitSections);
-                drawFits(view, pRefitFits);
-                panelLabel = "refit: " + (pRefitFits.size() + accepted.size());
-                return view;
-            case 17: {
-                view = tmpClone(pImage);
-                for (Found b : pBalls) {
-                    Point center = rounded(b.x, b.y);
-                    if (b.expected > 0) Imgproc.circle(view, center, Math.max((int) Math.rint(b.expected), 1), CYAN, 1);
-                    Imgproc.circle(view, center, Math.max((int) Math.rint(b.r), 1), b.kept ? GREEN : RED, 1);
-                }
-                panelLabel = "size filter: kept " + keptCount() + " of " + pBalls.size();
-                return view;
-            }
-            case 18: {
-                byte[] scaled = new byte[H * W];
-                for (int i = 0; i < H * W; i++) scaled[i] = (byte) (pRemaining[i] != 0 ? 255 : 0);
-                view = tmp();
-                Imgproc.cvtColor(bytesMat(scaled, H, W), view, Imgproc.COLOR_GRAY2BGR);
-                for (Found b : pEstimated) {
-                    Imgproc.circle(view, rounded(b.x, b.y), (int) Math.rint(b.r), ORANGE, 1);
-                    Imgproc.circle(view, rounded(b.x, b.y), 2, ORANGE, -1);
-                }
-                panelLabel = "remaining mask: " + pEstimated.size() + " estimated";
-                return view;
-            }
-            case 19:
-                view = tmpClone(pImage);
-                for (Found b : pBalls) if (b.kept) Imgproc.circle(view, rounded(b.x, b.y), 2, b.estimated ? ORANGE : RED, -1);
-                panelLabel = "center dots: " + keptCount();
-                return view;
-            case 20: {
-                view = tmpClone(pImage);
-                int number = 1;
-                for (Found b : pBalls) {
-                    if (!b.kept) continue;
-                    Point center = rounded(b.x, b.y);
-                    Imgproc.circle(view, center, 2, RED, -1);
-                    Imgproc.putText(view, String.valueOf(number), new Point(center.x + 4, center.y - 4), FONT, 0.4, RED, 1);
-                    number++;
-                }
-                panelLabel = "centers: " + keptCount();
-                return view;
-            }
-            default: {
-                view = tmp();
-                undistortView(pImage, view);
-                List<Point> kept = new ArrayList<>();
-                for (Found b : pBalls) if (b.kept) kept.add(new Point(b.x, b.y));
-                if (!kept.isEmpty()) {
-                    MatOfPoint2f source = new MatOfPoint2f(kept.toArray(new Point[0]));
-                    MatOfPoint2f straight = new MatOfPoint2f();
-                    Calib3d.undistortPoints(source, straight, calMatrix, calDist, tmp(), calMatrix);
-                    for (Point p : straight.toArray()) Imgproc.circle(view, rounded(p.x, p.y), 2, RED, -1);
-                    source.release();
-                    straight.release();
-                }
-                panelLabel = "undistorted centers: " + keptCount();
-                return view;
-            }
-        }
-    }
-
-    static List<Mat[]> stripeMaps = new ArrayList<>();
-    static int[] stripeRows = new int[0];
-    static double[] stripeSignature;
-
-    static void undistortView(Mat src, Mat dst) {
-        int rows = src.rows(), cols = src.cols();
-        double[] signature = {rows, cols, calMatrix.get(0, 0)[0], calMatrix.get(1, 1)[0], calMatrix.get(0, 2)[0], calMatrix.get(1, 2)[0], calDist.get(0, 0)[0], calDist.get(0, 1)[0], calDist.get(0, 2)[0], calDist.get(0, 3)[0], calDist.get(0, 4)[0]};
-        if (!Arrays.equals(signature, stripeSignature)) {
-            for (Mat[] maps : stripeMaps) { maps[0].release(); maps[1].release(); }
-            stripeMaps.clear();
-            int stripe = Math.min(Math.max(1, (1 << 12) / Math.max(cols, 1)), rows);
-            int count = (rows + stripe - 1) / stripe;
-            stripeRows = new int[count + 1];
-            Mat shifted = calMatrix.clone();
-            double v0 = calMatrix.get(1, 2)[0];
-            Mat identity = Mat.eye(3, 3, CvType.CV_64F);
-            for (int k = 0, y = 0; y < rows; y += stripe, k++) {
-                int height = Math.min(stripe, rows - y);
-                shifted.put(1, 2, v0 - y);
-                Mat map1 = new Mat(), map2 = new Mat();
-                Calib3d.initUndistortRectifyMap(calMatrix, calDist, identity, shifted, new Size(cols, height), CvType.CV_16SC2, map1, map2);
-                stripeMaps.add(new Mat[]{map1, map2});
-                stripeRows[k] = y;
-            }
-            stripeRows[count] = rows;
-            shifted.release();
-            identity.release();
-            stripeSignature = signature;
-        }
-        dst.create(rows, cols, src.type());
-        for (int k = 0; k < stripeMaps.size(); k++) {
-            Mat part = dst.rowRange(stripeRows[k], stripeRows[k + 1]);
-            Imgproc.remap(src, part, stripeMaps.get(k)[0], stripeMaps.get(k)[1], Imgproc.INTER_LINEAR, Core.BORDER_CONSTANT);
-            part.release();
-        }
-    }
-
     public static class Ball {
         public final double x;
         public final double y;
         public final double radius;
         public final double rangeCm;
-        public final double xRobot;
-        public final double yRobot;
-        public final double zRobot;
-        public final double floorXCm;
-        public final double floorYCm;
         public final boolean hasRange;
         public final boolean estimated;
 
@@ -3471,31 +3051,21 @@ public class Detect implements VisionProcessor, CameraStreamSource {
             this.y = y;
             this.radius = radius;
             this.estimated = found.estimated;
-            this.hasRange = found.raw != null && found.position != null;
-            if (hasRange) {
-                this.rangeCm = found.raw[3];
-                this.xRobot = found.raw[0];
-                this.yRobot = found.raw[1];
-                this.zRobot = ballRadiusCm;
-                this.floorXCm = found.position[0];
-                this.floorYCm = found.position[1];
-            } else {
-                this.rangeCm = this.xRobot = this.yRobot = this.zRobot = this.floorXCm = this.floorYCm = 0;
-            }
+            this.hasRange = found.raw != null;
+            this.rangeCm = hasRange ? found.raw[3] : 0;
         }
     }
 
     public volatile double debugProcessMs = -1;
     public volatile int debugSingles = 0;
     public volatile int debugSeeds = 0;
-    public volatile int debugConnections = 0;
     public volatile int debugCircles = 0;
     public volatile int debugEstimated = 0;
     public volatile int debugKept = 0;
     public static volatile double debugMaskPct = 0; // % of the image that passed the colour test, last frame
     public static volatile String debugChroma = ""; // % of image with yellow hue and OK brightness, per chroma floor
-    public static volatile String debugCenter = "";
-    public static volatile String debugFound = ""; // every circle found, last frame, and why it was dropped // colour at the image centre, last frame, vs the thresholds
+    public static volatile String debugCenter = ""; // colour at the image centre, last frame, vs the thresholds
+    public static volatile String debugFound = ""; // every circle found, last frame, and why it was dropped
     public volatile String debugStages = "";
     public volatile String debugError = "";
 
@@ -3511,13 +3081,11 @@ public class Detect implements VisionProcessor, CameraStreamSource {
     private volatile int epoch; // bumped by enable(); a frame started before that never becomes fresh
     private final VisionPortal portal;
     private boolean cameraLocked;
-    private volatile boolean lastTransposed = false;
-    private volatile int viewMode = 0;
     private final AtomicReference<Bitmap> lastFrame =
             new AtomicReference<>(Bitmap.createBitmap(1, 1, Bitmap.Config.RGB_565));
     // group F: Mats and view bitmaps reused across frames (frames are processed sequentially)
-    private final Mat fTransposed = new Mat(), fWorking = new Mat(), fBgr = new Mat();
-    private final Mat fView = new Mat(), fRgbPanel = new Mat();
+    private final Mat fWorking = new Mat(), fBgr = new Mat();
+    private final Mat fView = new Mat();
     private Bitmap fBitmapA, fBitmapB;
     private boolean fUseB;
     private int fFrameCount, fPublishedEpoch = -1;
@@ -3590,22 +3158,6 @@ public class Detect implements VisionProcessor, CameraStreamSource {
         geometrySignature = null; // reload the calibration on the next frame
     }
 
-    public List<Ball> getBalls() {
-        return latest.balls;
-    }
-
-    public void setViewMode(int mode) {
-        viewMode = Math.max(0, Math.min(MODE_NAMES.length - 1, mode));
-    }
-
-    public static String getModeName(int mode) {
-        return MODE_NAMES[Math.max(0, Math.min(MODE_NAMES.length - 1, mode))];
-    }
-
-    public static int getModeCount() {
-        return MODE_NAMES.length;
-    }
-
     @Override
     public void getFrameBitmap(Continuation<? extends Consumer<Bitmap>> continuation) {
         continuation.dispatch(consumer -> consumer.accept(lastFrame.get()));
@@ -3615,15 +3167,8 @@ public class Detect implements VisionProcessor, CameraStreamSource {
     public Object processFrame(Mat input, long captureTimeNanos) {
         long startTime = System.nanoTime();
         int frameEpoch = epoch;
-        int mode = viewMode;
-        boolean transposed = PORTRAIT;
         Mat frame = input;
         try {
-            if (transposed) {
-                frame = fTransposed;
-                Core.transpose(input, frame);
-            }
-
             double scale = 1.0;
             int workWidth = WORK_WIDTH;
             if (workWidth > 0 && frame.cols() > workWidth) {
@@ -3646,14 +3191,12 @@ public class Detect implements VisionProcessor, CameraStreamSource {
                 if (!f.kept) continue;
                 balls.add(new Ball(f.x * inverseScale, f.y * inverseScale, f.r * inverseScale, f));
             }
-            lastTransposed = transposed;
             frameW = frame.cols();
             frameH = frame.rows();
             latest = new Frame(latest.id + 1, Collections.unmodifiableList(balls));
             debugProcessMs = (System.nanoTime() - startTime) / 1e6;
             debugSingles = accepted.size();
             debugSeeds = spotX.length;
-            debugConnections = pConns.size();
             debugCircles = pRefitFits.size();
             debugEstimated = pEstimated.size();
             debugKept = balls.size();
@@ -3668,7 +3211,7 @@ public class Detect implements VisionProcessor, CameraStreamSource {
             boolean publish = fFrameCount == 0 || frameEpoch != fPublishedEpoch; // the first frame of every scan always shows
             fPublishedEpoch = frameEpoch;
             fFrameCount = (fFrameCount + 1) % Math.max(1, STREAM_EVERY);
-            if (publish) publishView(mode, frame, fBgr);
+            if (publish) publishView(frame);
             if (!fStreamSource) {
                 // Driver Station "Camera Stream" shows this processor's last view (with circles), held while disabled.
                 // Set here, not at build: the portal registers its raw feed when the camera starts streaming.
@@ -3685,27 +3228,15 @@ public class Detect implements VisionProcessor, CameraStreamSource {
         return null;
     }
 
-    private void publishView(int mode, Mat frame, Mat bgr) {
+    private void publishView(Mat frame) {
         Mat view = fView;
-        if (mode <= 0) {
-            frame.copyTo(view);
-            // every circle found: green = kept ball, red = dropped (size, radius limits or too far)
-            for (Found f : fFound) {
-                Point c = new Point(f.x * fInverseScale, f.y * fInverseScale);
-                Scalar color = f.kept ? new Scalar(0, 255, 0) : new Scalar(255, 0, 0); // view is RGB
-                Imgproc.circle(view, c, (int) Math.round(f.r * fInverseScale), color, 2);
-                Imgproc.circle(view, c, 3, color, -1);
-            }
-        } else {
-            Mat panel = buildPanel(mode);
-            Mat rgbPanel = fRgbPanel;
-            Imgproc.cvtColor(panel, rgbPanel, Imgproc.COLOR_BGR2RGB);
-            if (rgbPanel.cols() != frame.cols() || rgbPanel.rows() != frame.rows()) {
-                Imgproc.resize(rgbPanel, view, frame.size(), 0, 0, Imgproc.INTER_NEAREST);
-            } else {
-                rgbPanel.copyTo(view);
-            }
-            Imgproc.putText(view, MODE_NAMES[mode] + "  " + panelLabel + String.format(Locale.US, "  %.0f ms", debugProcessMs), new Point(10, 28), FONT, 0.7, new Scalar(255, 255, 0), 2);
+        frame.copyTo(view);
+        // every circle found: green = kept ball, red = dropped (size, radius limits or too far)
+        for (Found f : fFound) {
+            Point c = new Point(f.x * fInverseScale, f.y * fInverseScale);
+            Scalar color = f.kept ? new Scalar(0, 255, 0) : new Scalar(255, 0, 0); // view is RGB
+            Imgproc.circle(view, c, (int) Math.round(f.r * fInverseScale), color, 2);
+            Imgproc.circle(view, c, 3, color, -1);
         }
         int w = view.cols(), h = view.rows();
         if (fBitmapA == null || fBitmapA.getWidth() != w || fBitmapA.getHeight() != h) {
@@ -3723,39 +3254,6 @@ public class Detect implements VisionProcessor, CameraStreamSource {
     public void onDrawFrame(Canvas canvas, int onscreenWidth, int onscreenHeight,
                             float scaleBmpPxToCanvasPx, float scaleCanvasDensity,
                             Object userContext) {
-        List<Ball> balls = latest.balls;
-        boolean transposed = lastTransposed;
-        if (balls.isEmpty()) return;
-
-        Paint outline = new Paint();
-        outline.setColor(Color.GREEN);
-        outline.setStyle(Paint.Style.STROKE);
-        outline.setStrokeWidth(scaleCanvasDensity * 3);
-
-        Paint dot = new Paint();
-        dot.setColor(Color.RED);
-        dot.setStyle(Paint.Style.FILL);
-
-        Paint label = new Paint();
-        label.setColor(Color.GREEN);
-        label.setTextSize(scaleCanvasDensity * 16);
-
-        int index = 1;
-        for (Ball ball : balls) {
-            double bx = transposed ? ball.y : ball.x;
-            double by = transposed ? ball.x : ball.y;
-            float cx = (float) bx * scaleBmpPxToCanvasPx;
-            float cy = (float) by * scaleBmpPxToCanvasPx;
-            float r = (float) ball.radius * scaleBmpPxToCanvasPx;
-            canvas.drawCircle(cx, cy, r, outline);
-            canvas.drawCircle(cx, cy, scaleCanvasDensity * 3, dot);
-
-            String text = String.valueOf(index);
-            if (ball.hasRange) {
-                text += "  " + Math.round(ball.rangeCm) + "cm";
-            }
-            canvas.drawText(text, cx + r + 4, cy, label);
-            index++;
-        }
+        // live view is off: the Driver Station stream (publishView) draws the circles instead
     }
 }

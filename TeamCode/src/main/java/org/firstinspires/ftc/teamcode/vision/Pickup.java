@@ -91,8 +91,8 @@ public class Pickup {
         double calW = Detect.calW, calH = Detect.calH;
         double frameW = Detect.frameW, frameH = Detect.frameH;
         if (frameW <= 0) {
-            frameW = Detect.PORTRAIT ? calH : calW;
-            frameH = Detect.PORTRAIT ? calW : calH;
+            frameW = calW;
+            frameH = calH;
         }
         impose = new Impose(k[0], k[4], k[2], k[5], calW, calH,
                 d[0], d[1], d[2], d[3], d.length > 4 ? d[4] : 0,

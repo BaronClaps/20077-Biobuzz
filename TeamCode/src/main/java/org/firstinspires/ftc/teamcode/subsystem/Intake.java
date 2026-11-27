@@ -17,8 +17,8 @@ public class Intake {
     public final Servo gate, adjustableLeft, adjustableRight, flowerLeft, flowerRight;
     public final DigitalChannel beam;
     public final AnalogInput hive;
-    public static double inIntakePower = 0.85, inTransferPower = 0.5, outIntakePower = -.5, outTransferPower = -0.5, shootIntakePower = 0.6, shootTransferPower = 0.45, passiveIntakePower = 0.7, passiveTransferPower = 0;
-    public static double gateOpen = 0.77, gateClosed = 0.85;
+    public static double inIntakePower = 0.85, inTransferPower = 0.5, outIntakePower = -.5, outTransferPower = -0.5, shootIntakePower = 0.6, shootTransferPower = 0.6, passiveIntakePower = 0.7, passiveTransferPower = 0;
+    public static double gateOpen = 0.77, gateClosed = 0.88;
     public static double adjustableDown = 0.45, adjustableUp = 0.18;
     public static double flowerDown = 0.48, flowerUp = 0.67;
     public static double hiveMaxVolt = 3.3, hiveMaxDistance = 5000, hiveThreshold = 650, transferStallThreshold = 3, intakeStallThreshold = 4.1;

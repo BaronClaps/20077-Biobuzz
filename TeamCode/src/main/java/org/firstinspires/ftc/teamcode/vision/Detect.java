@@ -47,7 +47,7 @@ public class Detect implements VisionProcessor, CameraStreamSource {
     public static double camPitchDownDeg = 8.3, camYawLeftDeg = -5; // pitch fitted with the height; yaw ~5 deg right, from ball bearings in the overhead photo
 
     public static int tileR = 128, tileG = 128, tileB = 128; // equal = no white-balance correction (C270 colours are already neutral)
-    public static int minHue = 70, maxHue = 118, minChroma = 20, minBright = 61, maxBright = 255; // C270 + beige carpet: carpet sits at chroma 10-15, ball 20-35
+    public static int minHue = 70, maxHue = 118, minChroma = 28, minBright = 61, maxBright = 255; // C270 in the shop: wood shelf chroma 20-25, balls 40+ (beige carpet sat at 10-15); 30+ loses balls on the old carpet frame
     public static int holeFillMaxPx = 24;
     public static int blemishMaxPx = 12, blemishDarkness = 15, smoothSize = 15;
     public static int singleMinAreaPx = 60;

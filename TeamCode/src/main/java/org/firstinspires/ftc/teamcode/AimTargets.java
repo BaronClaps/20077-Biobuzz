@@ -7,23 +7,23 @@ import org.firstinspires.ftc.teamcode.utils.Alliance;
 
 @Config
 public class AimTargets {
-    public static final Pose blueScoring = new Pose(84, 86);
-    public static final Pose blueAudience = new Pose(84, 55.5);
-    public static final Pose redScoring = new Pose(57.5, 86);
-    public static final Pose redAudience = new Pose(57.5, 55.5);
+    public static double blueScoringX = 84, blueScoringY = 86;
+    public static double blueAudienceX = 84, blueAudienceY = 55.5;
+    public static double redScoringX = 57.5, redScoringY = 86;
+    public static double redAudienceX = 57.5, redAudienceY = 55.5;
 
     public static Pose target(Alliance a, Pose currentPose) {
         if (a == Alliance.BLUE) {
             if (currentPose.y() > 70.75) {
-                return blueScoring;
+                return new Pose(blueScoringX, blueScoringY);
             } else {
-                return blueAudience;
+                return new Pose(blueAudienceX, blueAudienceY);
             }
         } else {
             if (currentPose.y() > 70.75) {
-                return redScoring;
+                return new Pose(redScoringX, redScoringY);
             } else {
-                return redAudience;
+                return new Pose(redAudienceX, redAudienceY);
             }
         }
     }

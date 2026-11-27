@@ -1,18 +1,24 @@
 package org.firstinspires.ftc.teamcode.subsystem;
 
+import com.acmerobotics.dashboard.config.Config;
 import com.pedropathing.math.Pose;
-import com.pedropathing.utils.Utils;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.qualcomm.robotcore.hardware.PwmControl;
 import com.qualcomm.robotcore.hardware.ServoImplEx;
 
 import static com.pedropathing.utils.Angle.normalizeSigned;
 
+@Config
 public class Turret {
     private final ServoImplEx left, right;
     private double pwm = 1500;
     private static final double ppr = (-1500+1000) / (Math.PI/2);
     public static final double center = 1500;
+    public static double seamHysteresisDeg = 5;
+    private static final double seamEdge = Math.PI - 1e-3;
+
+    // forward is +, left is +
+    public static double pivotForward = -0.59, pivotLeft = 0;
 
     public Turret(HardwareMap hardwareMap) {
         left = hardwareMap.get(ServoImplEx.class, "turretLeft");
@@ -53,9 +59,18 @@ public class Turret {
     }
 
     public double returnFace(Pose targetPose, Pose robotPose) {
-        double angleToTargetFromCenter = Math.atan2(targetPose.y() - robotPose.y(), targetPose.x() - robotPose.x());
-        double robotAngleDiff = normalizeSigned(angleToTargetFromCenter - robotPose.heading() + Math.PI/4)-Math.PI/4;
-//        robotAngleDiff = Utils.clamp(robotAngleDiff, -Math.PI,  Math.PI);
-        return robotAngleDiff;
+        double heading = robotPose.heading();
+        double pivotX = robotPose.x() + pivotForward * Math.cos(heading) - pivotLeft * Math.sin(heading);
+        double pivotY = robotPose.y() + pivotForward * Math.sin(heading) + pivotLeft * Math.cos(heading);
+        double angleToTargetFromCenter = Math.atan2(targetPose.y() - pivotY, targetPose.x() - pivotX);
+        double desired = normalizeSigned(angleToTargetFromCenter - robotPose.heading());
+        double current = angle();
+
+        boolean crossesSeam = Math.abs(desired - current) > Math.PI;
+        if (crossesSeam && Math.PI - Math.abs(desired) < Math.toRadians(seamHysteresisDeg)) {
+            return Math.copySign(seamEdge, current);
+        }
+
+        return desired;
     }
 }

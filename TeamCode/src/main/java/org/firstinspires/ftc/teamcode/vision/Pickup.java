@@ -39,7 +39,7 @@ public class Pickup {
     public static double runIn = 6; // TUNE: straight inches before the ball reaches the intake, so the robot is square on
     public static double driveThrough = 2; // robot fact: must drive >= 2 in past each ball for a sure pickup (straight, past the ball)
     public static double rMin = 5; // TUNE: tightest turn radius (in) the route may use
-    public static double approachSpeed = 0.5; // TUNE: fraction of vmax on the straight run-ins and slow pieces
+    public static double approachSpeed = 0.75; // TUNE: fraction of vmax on the straight run-ins and slow pieces (0.5 = 20 in/s picked up fine but slow)
 
     // The planner's MODEL of the robot: the route is checked (no backing up, heading reaches the run-in heading in time) by
     // simulating a robot at these numbers, so the robot must really drive at them. path() enforces vmax on the Pedro
@@ -65,6 +65,7 @@ public class Pickup {
     public static double scanMatchRadius = 2; // in: same ball across frames if within this
     public static double scanTimeoutMs = 2500; // plan with the frames seen so far after this; keep about 2x the Vision Test frame time
     public static double finishWaitMs = 1000; // max wait for the follower to stop after a pass
+    public static double fullBeamMs = 250; // intake beam blocked this long = intake full: stop driving (a passing ball blocks it ~0.1 s)
     public static double passTimeoutMs = 15000;
     public static int maxPasses = 5;
     public static double missRadius = 3; // a ball this close to an earlier target counts as missed

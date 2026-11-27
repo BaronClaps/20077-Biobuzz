@@ -19,7 +19,7 @@ import java.util.Set;
 public class Route {
     public enum Mode {CURVE, CONSTANT}
 
-    /** Tunables and robot facts. Defaults match Pickup; Pickup copies the live values in. */
+    /** Tunables and robot facts. Defaults match the JS reference; Pickup copies its live values in (e.g. approachSpeed 0.75). */
     public static class Params {
         public int capacity = 4;
         public double intakeWidth = 10, intakeReach = 7, ballDiameter = 2.85, turnPenalty = 6.0;

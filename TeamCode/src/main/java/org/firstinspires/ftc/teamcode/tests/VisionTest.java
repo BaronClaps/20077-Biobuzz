@@ -17,7 +17,7 @@ import java.util.Locale;
 
 /**
  * Press A: one detect frame -> ball pixels -> field x, y -> route, with timings. Vision is off between presses.
- * B: drive the last route with the intake running (stops itself at the end). X: stop. Y: reset the pose to Pickup's start.
+ * B: drive the last route with the intake running; stops at the route end or once the intake is full. X: stop. Y: reset the pose to Pickup's start.
  */
 @TeleOp(name = "Vision Test", group = "Tests")
 public class VisionTest extends LinearOpMode {
@@ -26,6 +26,8 @@ public class VisionTest extends LinearOpMode {
     Intake intake;
     Path lastPath;
     boolean driving = false;
+    long beamSince = 0; // when the intake beam became blocked, 0 = clear
+    String driveResult = "";
     final List<String> report = new ArrayList<>();
     int runs = 0;
 
@@ -40,15 +42,25 @@ public class VisionTest extends LinearOpMode {
 
         while (opModeInInit() || opModeIsActive()) {
             follower.update();
+            boolean stopPressed = gamepad1.xWasPressed(); // read every loop: an unread press would cancel the next drive
             if (gamepad1.aWasPressed() && !driving) runOnce();
             if (gamepad1.bWasPressed() && opModeIsActive() && !driving && lastPath != null) {
                 follower.follow(lastPath);
                 intake.in();
                 driving = true;
+                beamSince = 0;
+                driveResult = "";
             }
-            if (driving && (gamepad1.xWasPressed() || !follower.isBusy())) {
+            if (driving) {
+                if (!intake.detected()) beamSince = 0;
+                else if (beamSince == 0) beamSince = System.nanoTime();
+            }
+            boolean full = driving && beamSince != 0 && ms(beamSince) >= Pickup.fullBeamMs;
+            if (driving && (stopPressed || full || !follower.isBusy())) {
+                driveResult = full ? String.format(Locale.US, "stopped: intake full at %.0f%% of the route", 100 * follower.completion())
+                        : follower.isBusy() ? "stopped with X" : "route finished";
                 follower.stop();
-                intake.stop();
+                if (full) intake.passive(); else intake.stop(); // a full intake is held at passive power, as in Tele
                 driving = false;
                 lastPath = null; // the robot has moved: press A for a fresh route from here
             }
@@ -126,6 +138,7 @@ public class VisionTest extends LinearOpMode {
     void show() {
         telemetry.addData("Runs", runs);
         if (driving) telemetry.addData("Driving", "%.0f%% of the route, X to stop", 100 * follower.completion());
+        else if (!driveResult.isEmpty()) telemetry.addData("Last drive", driveResult);
         telemetry.addData("Calibration", Detect.calFromSdk ? "SDK" : "FALLBACK (no SDK calibration at this resolution)");
         telemetry.addData("Pose", follower.pose());
         for (String line : report) telemetry.addLine(line);

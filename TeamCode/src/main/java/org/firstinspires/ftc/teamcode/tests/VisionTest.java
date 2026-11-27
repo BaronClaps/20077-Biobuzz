@@ -7,6 +7,7 @@ import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 
 import org.firstinspires.ftc.teamcode.pedro.Constants;
+import org.firstinspires.ftc.teamcode.subsystem.Intake;
 import org.firstinspires.ftc.teamcode.vision.Detect;
 import org.firstinspires.ftc.teamcode.vision.Pickup;
 
@@ -16,12 +17,15 @@ import java.util.Locale;
 
 /**
  * Press A: one detect frame -> ball pixels -> field x, y -> route, with timings. Vision is off between presses.
- * The robot does not drive; the follower only supplies the pose (starts at Pickup's start pose).
+ * B: drive the last route with the intake running (stops itself at the end). X: stop. Y: reset the pose to Pickup's start.
  */
 @TeleOp(name = "Vision Test", group = "Tests")
 public class VisionTest extends LinearOpMode {
     Follower follower;
     Detect detect;
+    Intake intake;
+    Path lastPath;
+    boolean driving = false;
     final List<String> report = new ArrayList<>();
     int runs = 0;
 
@@ -31,13 +35,30 @@ public class VisionTest extends LinearOpMode {
         follower.setPose(new Pose(Pickup.startX, Pickup.startY, Math.toRadians(Pickup.startHeadingDeg)));
         detect = new Detect(hardwareMap);
         detect.disable();
+        intake = new Intake(hardwareMap);
         report.add("Press A to detect once");
 
         while (opModeInInit() || opModeIsActive()) {
             follower.update();
-            if (gamepad1.aWasPressed()) runOnce();
+            if (gamepad1.aWasPressed() && !driving) runOnce();
+            if (gamepad1.bWasPressed() && opModeIsActive() && !driving && lastPath != null) {
+                follower.follow(lastPath);
+                intake.in();
+                driving = true;
+            }
+            if (driving && (gamepad1.xWasPressed() || !follower.isBusy())) {
+                follower.stop();
+                intake.stop();
+                driving = false;
+                lastPath = null; // the robot has moved: press A for a fresh route from here
+            }
+            if (gamepad1.yWasPressed() && !driving) {
+                follower.setPose(new Pose(Pickup.startX, Pickup.startY, Math.toRadians(Pickup.startHeadingDeg)));
+            }
             show();
         }
+        follower.stop();
+        intake.stop();
         detect.close();
     }
 
@@ -94,15 +115,17 @@ public class VisionTest extends LinearOpMode {
 
         long t2 = System.nanoTime();
         Path path = pickup.path(pose);
+        lastPath = path;
         double routeMs = ms(t2);
         report.add(String.format(Locale.US, "Route: %.1f ms, %s", routeMs,
-                path == null ? "no path" : path.getSegments().size() + " segments"));
+                path == null ? "no path" : path.getSegments().size() + " segments, press B to drive it (X stops)"));
         report.add(pickup.debug());
         report.add(String.format(Locale.US, "Total: %.0f ms", ms(t0)));
     }
 
     void show() {
         telemetry.addData("Runs", runs);
+        if (driving) telemetry.addData("Driving", "%.0f%% of the route, X to stop", 100 * follower.completion());
         telemetry.addData("Calibration", Detect.calFromSdk ? "SDK" : "FALLBACK (no SDK calibration at this resolution)");
         telemetry.addData("Pose", follower.pose());
         for (String line : report) telemetry.addLine(line);

@@ -42,9 +42,9 @@ public class Detect implements VisionProcessor, CameraStreamSource {
     // the robot once tuned (e.g. 4600 K); manual exposure (e.g. 15 ms) also cuts motion blur.
     public static int whiteBalanceK = 0, exposureMs = 0, gain = 0;
     // ---- camera mount, relative to the robot centre (inches, degrees). The only copy: Pickup/Impose read these too ----
-    public static double camForwardIn = 0, camLeftIn = 0; // PLACEHOLDER: measure on robot
-    public static double camHeightIn = 4.5; // lens height above the floor: measured 4, fitted 4.5 from 3 ball sizes
-    public static double camPitchDownDeg = 19, camYawLeftDeg = 0; // measured 15, fitted 19 from 3 ball sizes; yaw 0 = straight ahead
+    public static double camForwardIn = 2, camLeftIn = 7; // lens from robot centre, estimated from overhead photos: tape-measure to confirm
+    public static double camHeightIn = 6.6; // lens height above the floor: fitted from 2 ball sizes on the DS (front-left side-plate mount)
+    public static double camPitchDownDeg = 8.3, camYawLeftDeg = -5; // pitch fitted with the height; yaw ~5 deg right, from ball bearings in the overhead photo
 
     public static int tileR = 128, tileG = 128, tileB = 128; // equal = no white-balance correction (C270 colours are already neutral)
     public static int minHue = 70, maxHue = 118, minChroma = 20, minBright = 61, maxBright = 255; // C270 + beige carpet: carpet sits at chroma 10-15, ball 20-35
@@ -61,7 +61,7 @@ public class Detect implements VisionProcessor, CameraStreamSource {
     public static double seedVoteBlurPctg = 0.2, seedMinCoverPctg = 0.03, seedSpacingPctg = 0.5, seedMinFillPctg = 0.4, seedClimbBlurPx = 1.5, seedSameSpotReachPctg = 0.7;
     public static double ballRadiusCm = 3.55;
     static final double CM = 2.54; // cm per inch
-    public static double sizeFilterPctg = 0.5, ballMinRadiusPx = 2.0, ballMaxRadiusPx = 120.0, fieldMaxDistanceCm = 450;
+    public static double sizeFilterPctg = 0.5, ballMinRadiusPx = 2.0, ballMaxRadiusPx = 120.0, fieldMaxDistanceCm = 200; // farther balls are skipped and the image above them is not searched (cuts the yellow shop shelf)
     public static double remainingOpenPctg = 0.25, remainingMinBallPctg = 0.4, remainingBallAreaPctg = 1.0, remainingMinRadiusPx = 2.5;
     public static int regionMinPx = 15;
     public static double seamWeight = 0.3;
@@ -2929,6 +2929,10 @@ public class Detect implements VisionProcessor, CameraStreamSource {
         stageStart = System.nanoTime();
         Mat image = whiteBalance(raw);
         byte[] mask = yellowMask(image);
+        // above the farthest floor row (less one ball radius, so a ball on that row keeps its top) is only shelves and walls: skip it
+        double focal = (calMatrix.get(0, 0)[0] + calMatrix.get(1, 1)[0]) / 2;
+        int top = Math.max(0, fieldCutoffRow() - (int) Math.ceil(focal * ballRadiusCm / fieldMaxDistanceCm));
+        Arrays.fill(mask, 0, Math.min(top, H) * W, (byte) 0);
         dropSpecks(mask);
         byte[] filled = fillHoles(mask);
         pFilled = filled;

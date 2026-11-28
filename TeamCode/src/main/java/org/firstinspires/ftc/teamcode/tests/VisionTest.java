@@ -17,14 +17,15 @@ import java.util.Locale;
 
 /**
  * Press A: one detect frame -> ball pixels -> field x, y -> route, with timings. Vision is off between presses.
- * B: drive the last route with the intake running; stops at the route end or once the intake is full. X: stop. Y: reset the pose to Pickup's start.
+ * B: drive the last route with the intake running (a split route: first route, back up, second route); stops at the route end or once the intake is full. X: stop. Y: reset the pose to Pickup's start.
  */
 @TeleOp(name = "Vision Test", group = "Tests")
 public class VisionTest extends LinearOpMode {
     Follower follower;
     Detect detect;
     Intake intake;
-    Path lastPath;
+    List<Path> legs = new ArrayList<>(); // the last route's paths, driven one after the other
+    int leg = 0;
     boolean driving = false;
     long beamSince = 0; // when the intake beam became blocked, 0 = clear
     String driveResult = "";
@@ -44,8 +45,9 @@ public class VisionTest extends LinearOpMode {
             follower.update();
             boolean stopPressed = gamepad1.xWasPressed(); // read every loop: an unread press would cancel the next drive
             if (gamepad1.aWasPressed() && !driving) runOnce();
-            if (gamepad1.bWasPressed() && opModeIsActive() && !driving && lastPath != null) {
-                follower.follow(lastPath);
+            if (gamepad1.bWasPressed() && opModeIsActive() && !driving && !legs.isEmpty()) {
+                leg = 0;
+                follower.follow(legs.get(0));
                 intake.in();
                 driving = true;
                 beamSince = 0;
@@ -56,13 +58,14 @@ public class VisionTest extends LinearOpMode {
                 else if (beamSince == 0) beamSince = System.nanoTime();
             }
             boolean full = driving && beamSince != 0 && ms(beamSince) >= Pickup.fullBeamMs;
+            if (driving && !stopPressed && !full && !follower.isBusy() && leg + 1 < legs.size()) follower.follow(legs.get(++leg));
             if (driving && (stopPressed || full || !follower.isBusy())) {
-                driveResult = full ? String.format(Locale.US, "stopped: intake full at %.0f%% of the route", 100 * follower.completion())
+                driveResult = full ? String.format(Locale.US, "stopped: intake full on path %d of %d at %.0f%%", leg + 1, legs.size(), 100 * follower.completion())
                         : follower.isBusy() ? "stopped with X" : "route finished";
                 follower.stop();
                 if (full) intake.passive(); else intake.stop(); // a full intake is held at passive power, as in Tele
                 driving = false;
-                lastPath = null; // the robot has moved: press A for a fresh route from here
+                legs.clear(); // the robot has moved: press A for a fresh route from here
             }
             if (gamepad1.yWasPressed() && !driving) {
                 follower.setPose(new Pose(Pickup.startX, Pickup.startY, Math.toRadians(Pickup.startHeadingDeg)));
@@ -126,18 +129,17 @@ public class VisionTest extends LinearOpMode {
         }
 
         long t2 = System.nanoTime();
-        Path path = pickup.path(pose);
-        lastPath = path;
+        legs = pickup.paths(pose);
         double routeMs = ms(t2);
         report.add(String.format(Locale.US, "Route: %.1f ms, %s", routeMs,
-                path == null ? "no path" : path.getSegments().size() + " segments, press B to drive it (X stops)"));
+                legs.isEmpty() ? "no path" : legs.size() + (legs.size() == 1 ? " path" : " paths") + ", press B to drive it (X stops)"));
         report.add(pickup.debug());
         report.add(String.format(Locale.US, "Total: %.0f ms", ms(t0)));
     }
 
     void show() {
         telemetry.addData("Runs", runs);
-        if (driving) telemetry.addData("Driving", "%.0f%% of the route, X to stop", 100 * follower.completion());
+        if (driving) telemetry.addData("Driving", "path %d of %d, %.0f%%, X to stop", leg + 1, legs.size(), 100 * follower.completion());
         else if (!driveResult.isEmpty()) telemetry.addData("Last drive", driveResult);
         telemetry.addData("Calibration", Detect.calFromSdk ? "SDK" : "FALLBACK (no SDK calibration at this resolution)");
         telemetry.addData("Pose", follower.pose());

@@ -11,8 +11,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Detect frames in, ball positions and a Pedro path out:
- * start(); add(detect.capture(), pose) every loop until frames() >= scanFrames; positions(pose); path(pose).
+ * Detect frames in, ball positions and Pedro paths out:
+ * start(); add(detect.capture(), pose) every loop until frames() >= scanFrames; positions(pose); paths(pose), driven in order.
  * Camera settings and mount live in Detect. Inches, degrees unless noted.
  */
 @Config
@@ -56,6 +56,12 @@ public class Pickup {
     // TUNE: accel and turnRateDeg are not enforced by Pedro; measure them on the robot and keep them at or below what it
     // really does (lower = safer, the planner then accepts fewer sharp turns). Keep vmax at or below the real top speed.
     public static double vmax = 40, accel = 80; // in/s, in/s^2
+    // TUNE: sideways grip on curves (in/s^2, ~0.3 g). Each curve is capped at sqrt(this * its tightest radius): 30 in/s round a
+    // 5 in loop slid wide and missed the balls. Driving a curve slower than the model only gives the heading more time.
+    public static double maxSideAccel = 120;
+    // a route that would loop round a tight cluster is split: a first route, back up straight (6 in steps, up to this far),
+    // then a second route from there for the rest
+    public static double backUpMax = 24;
     public static double turnRateDeg = 270; // deg/s
 
     // ---- scan / auto ----
@@ -77,6 +83,11 @@ public class Pickup {
     private Route.Plan plan = null;
     private List<double[]> targets = new ArrayList<>(); // balls the last plan went for
     private List<double[]> others = new ArrayList<>(); // balls the last plan left alone
+    private boolean fewerForClean = false; // the last plan dropped balls to avoid a looping route
+    private Route.Plan second = null; // after plan: back up to backUp, then this route through secondBalls
+    private List<double[]> secondBalls = new ArrayList<>();
+    private Pose backUp = null;
+    private double backUpDist = 0;
     private int missed = 0, collected = 0;
     private final List<List<double[]>> scanned = new ArrayList<>();
     private long lastFrameId = -1;
@@ -219,15 +230,36 @@ public class Pickup {
 
     // ---- plan + path ----
 
-    /** Plans from start through the best balls of the last positions() (room left in the intake), as one Pedro path; null if none. */
-    public Path path(Pose start) {
-        return path(plan(start), start);
+    /**
+     * Plans from start through the best balls of the last positions() (room left in the intake). Drive the paths one after
+     * the other: one route, or route, straight back-up, second route. Empty if there is nothing to drive.
+     */
+    public List<Path> paths(Pose start) {
+        plan(start);
+        List<Path> out = new ArrayList<>();
+        Path first = path(plan, start);
+        if (first != null) out.add(first);
+        if (second != null) {
+            Pose end = new Pose(backUp.x() + backUpDist * Math.cos(backUp.heading()),
+                    backUp.y() + backUpDist * Math.sin(backUp.heading()), backUp.heading());
+            out.add(Paths.line(end, backUp).constant(backUp)
+                    .with(Constants.foresightConfig.maxVelocityConstraint.at(vmax * approachSpeed)));
+            Path rest = path(second, backUp);
+            if (rest != null) out.add(rest);
+        }
+        return out;
     }
 
     // plans only for the room left in the intake
     public Route.Plan plan(Pose start) {
-        params.capacity = remaining();
+        int room = remaining();
+        params.capacity = room;
         plan = Route.plan(start.x(), start.y(), start.heading(), balls, params);
+        fewerForClean = false;
+        second = null;
+        secondBalls = new ArrayList<>();
+        // a looping route round a tight cluster went wide and missed every ball on the robot
+        if (plan.loops > 0) split(start, room, plan.chosen.length);
         targets = new ArrayList<>();
         others = new ArrayList<>();
         boolean[] chosen = new boolean[balls.size()];
@@ -235,8 +267,57 @@ public class Pickup {
             targets.add(balls.get(id));
             chosen[id] = true;
         }
-        for (int i = 0; i < balls.size(); i++) if (!chosen[i]) others.add(balls.get(i));
+        if (second != null) for (int id : second.chosen) targets.add(secondBalls.get(id));
+        for (int i = 0; i < balls.size(); i++) if (!chosen[i] && !targets.contains(balls.get(i))) others.add(balls.get(i));
         return plan;
+    }
+
+    // Replaces the looping plan with: the most balls a route without loops takes, back up straight, a second route without
+    // loops from there for the rest. No such split: only the first route (fewer balls), the next scan gets the rest.
+    private void split(Pose start, int room, int want) {
+        Route.Plan fallback = null;
+        for (int k = room - 1; k >= 1; k--) {
+            params.capacity = k;
+            Route.Plan first = Route.plan(start.x(), start.y(), start.heading(), balls, params);
+            if (first.loops > 0 || first.empty()) continue;
+            if (fallback == null) fallback = first;
+            List<Route.Segment> segs = Route.buildSegments(first, start.x(), start.y(), start.heading(), params);
+            Route.Segment end = segs.get(segs.size() - 1);
+            boolean[] taken = new boolean[balls.size()];
+            for (int id : first.chosen) taken[id] = true;
+            List<double[]> rest = new ArrayList<>();
+            for (int i = 0; i < balls.size(); i++) if (!taken[i]) rest.add(balls.get(i));
+            params.capacity = room - first.chosen.length;
+            double c = Math.cos(end.h1), s = Math.sin(end.h1);
+            for (double d = 6; d <= backUpMax; d += 6) {
+                if (backUpHits(end.x1, end.y1, c, s, d, rest)) break; // farther hits it too
+                Pose from = new Pose(end.x1 - d * c, end.y1 - d * s, end.h1);
+                Route.Plan next = Route.plan(from.x(), from.y(), from.heading(), rest, params);
+                if (next.reason.equals("start outside bound")) break; // farther is outside too
+                if (next.loops == 0 && first.chosen.length + next.chosen.length >= want) {
+                    plan = first;
+                    second = next;
+                    secondBalls = rest;
+                    backUp = from;
+                    backUpDist = d;
+                    return;
+                }
+            }
+        }
+        if (fallback != null) {
+            plan = fallback;
+            fewerForClean = true;
+        }
+    }
+
+    // the robot body (centred on the pose) backing up d along -(c, s) would push one of these balls
+    private static boolean backUpHits(double x, double y, double c, double s, double d, List<double[]> balls) {
+        double r = ballDiameter / 2;
+        for (double[] b : balls) {
+            double along = (b[0] - x) * c + (b[1] - y) * s, side = -(b[0] - x) * s + (b[1] - y) * c;
+            if (Math.abs(side) < robotWidth / 2 + r && along < 0 && along > -(robotLength / 2 + d + r)) return true;
+        }
+        return false;
     }
 
     // one compound path through every stop, or null if there is nothing to drive. Bezier pieces take their heading from the
@@ -257,7 +338,7 @@ public class Pickup {
                 p = Paths.line(new Pose(s.x0, s.y0, s.h0), new Pose(s.x1, s.y1, s.h1))
                         .constant(new Pose(s.x1, s.y1, s.h1));
             }
-            segs.add(capped(p, s.slow));
+            segs.add(capped(p, s));
         }
         if (segs.isEmpty()) return null;
         if (segs.size() == 1) return segs.get(0);
@@ -267,9 +348,25 @@ public class Pickup {
     // Pedro 3 Foresight.coast: targetVel = min(maxAchievable, maxPathSpeed * maxAchievable, maxVelocityConstraint). maxPathSpeed is
     // a fraction of the direction-dependent maxAchievableVelocity (79 forward, 59 strafe here), so it cannot give the planner's
     // fixed in/s; maxVelocityConstraint is in/s. Every piece is capped so the robot drives the speeds the planner verified.
-    private Path capped(Path p, boolean slow) {
-        double v = vmax * (slow ? approachSpeed : 1);
+    private Path capped(Path p, Route.Segment s) {
+        double v = vmax * (s.slow ? approachSpeed : 1);
+        if (s.mode == Route.Mode.CURVE) v = Math.min(v, Math.sqrt(maxSideAccel * minRadius(s)));
         return p.with(Constants.foresightConfig.maxVelocityConstraint.at(v));
+    }
+
+    // tightest radius of a cubic Bezier segment, sampled
+    static double minRadius(Route.Segment s) {
+        double best = Double.POSITIVE_INFINITY;
+        for (int i = 0; i <= 20; i++) {
+            double t = i / 20.0, u = 1 - t;
+            double dx = 3 * (u * u * (s.cx1 - s.x0) + 2 * u * t * (s.cx2 - s.cx1) + t * t * (s.x1 - s.cx2));
+            double dy = 3 * (u * u * (s.cy1 - s.y0) + 2 * u * t * (s.cy2 - s.cy1) + t * t * (s.y1 - s.cy2));
+            double ddx = 6 * (u * (s.cx2 - 2 * s.cx1 + s.x0) + t * (s.x1 - 2 * s.cx2 + s.cx1));
+            double ddy = 6 * (u * (s.cy2 - 2 * s.cy1 + s.y0) + t * (s.y1 - 2 * s.cy2 + s.cy1));
+            double cross = Math.abs(dx * ddy - dy * ddx), speed = Math.hypot(dx, dy);
+            if (cross > 1e-9) best = Math.min(best, speed * speed * speed / cross);
+        }
+        return best;
     }
 
     // ---- state ----
@@ -297,6 +394,8 @@ public class Pickup {
     public String debug() {
         if (balls.isEmpty()) return "Balls: none";
         if (plan == null) return "Balls: " + balls.size() + " seen, no plan";
-        return Route.describe(plan, balls);
+        if (second != null) return Route.describe(plan, balls) + String.format(java.util.Locale.US,
+                "\nthen back up %.0f in (one route for all looped), second route:\n", backUpDist) + Route.describe(second, secondBalls);
+        return Route.describe(plan, balls) + (fewerForClean ? "\n(fewer balls: the route for more looped)" : "");
     }
 }

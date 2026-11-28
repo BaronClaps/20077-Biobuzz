@@ -113,9 +113,11 @@ public class Route {
         public final List<RouteItem> route; // empty when there is nothing to drive
         public final int tier;
         public final String reason; // why the plan is empty ("" when it is not)
+        public final int loops; // pieces that loop round (turn more than loopRad beyond their net turn)
 
-        Plan(List<Stop> stops, double cost, List<RouteItem> route, int tier, double work, String reason) {
+        Plan(List<Stop> stops, double cost, List<RouteItem> route, int tier, double work, String reason, int loops) {
             this.reason = reason;
+            this.loops = loops;
             this.stops = stops;
             this.cost = cost;
             this.route = route;
@@ -1571,7 +1573,7 @@ public class Route {
     // ---- plan ----
 
     private static Plan emptyPlan(int tier, double work, String reason) {
-        return new Plan(new ArrayList<Stop>(), 0, new ArrayList<RouteItem>(), tier, work, reason);
+        return new Plan(new ArrayList<Stop>(), 0, new ArrayList<RouteItem>(), tier, work, reason, 0);
     }
 
     private static final int REACH_HEADS = 36;
@@ -1703,7 +1705,7 @@ public class Route {
             stops.add(new Stop(s.g.x, s.g.y, s.h, s.g.size == 2 ? new int[] {s.g.a, s.g.b} : new int[] {s.g.a}));
             route.add(new RouteItem(s));
         }
-        return new Plan(stops, best.cost, route, c.tier, work, "");
+        return new Plan(stops, best.cost, route, c.tier, work, "", best.loops);
     }
 
     // ---- segments ----

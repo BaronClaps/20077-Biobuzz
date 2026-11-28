@@ -72,7 +72,7 @@ public class Tele extends OpMode {
             robot.intake.close();
         }
 
-        if (transferTimer.seconds() > 0.1 && !opened && intakeMode == IntakeMode.STOP) {
+        if (transferTimer.seconds() > 0.2 && !opened && intakeMode == IntakeMode.STOP) {
             intakeMode = IntakeMode.TRANSFER;
             opened = true;
         }
